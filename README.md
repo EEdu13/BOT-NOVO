@@ -145,17 +145,17 @@ OBS: Dia chuvoso, terreno molhado
 
 ```env
 # Banco de Dados Azure SQL
-DB_SERVER=alrflorestal.database.windows.net
-DB_DATABASE=Tabela_teste
-DB_USER=sqladmin
-DB_PASSWORD=SenhaForte123!
+DB_SERVER=seu_servidor.database.windows.net
+DB_DATABASE=nome_do_banco
+DB_USER=usuario_banco
+DB_PASSWORD=senha_banco
 
 # OpenAI
-OPENAI_API_KEY=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
+OPENAI_API_KEY=sua_chave_openai_aqui
 
 # Z-API (Configure no seu painel Z-API)
-ZAPI_INSTANCE_ID=your_instance_id
-ZAPI_TOKEN=your_token
+ZAPI_INSTANCE_ID=sua_instance_id
+ZAPI_TOKEN=seu_token
 ZAPI_BASE_URL=https://api.z-api.io/instances
 
 # Servidor

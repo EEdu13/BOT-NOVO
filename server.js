@@ -5,6 +5,9 @@ const OpenAI = require('openai');
 const sql = require('mssql');
 require('dotenv').config();
 
+// Suprimir avisos de deprecação do punycode
+process.noDeprecation = true;
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 

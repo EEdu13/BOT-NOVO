@@ -1,11 +1,12 @@
 const sql = require('mssql');
+require('dotenv').config();
 
 // Configuração da conexão com Azure SQL Database
 const config = {
-    server: 'alrflorestal.database.windows.net',
-    database: 'Tabela_teste',
-    user: 'sqladmin',
-    password: 'SenhaForte123!',
+    server: process.env.DB_SERVER,
+    database: process.env.DB_DATABASE,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
     options: {
         encrypt: true, // Azure requer SSL
         trustServerCertificate: false
