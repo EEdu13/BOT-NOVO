@@ -14,14 +14,14 @@
 No painel do Railway, vá em **Variables** e adicione:
 
 ```
-DB_SERVER=alrflorestal.database.windows.net
-DB_DATABASE=Tabela_teste  
-DB_USER=sqladmin
-DB_PASSWORD=SenhaForte123!
-OPENAI_API_KEY=sk-proj-[SUA_CHAVE_OPENAI]
-ZAPI_INSTANCE_ID=3E5222A62A81F1F54D49166DEAE7FD59
-ZAPI_TOKEN=B8E1B4E1FA75141F36354BFD
-ZAPI_CLIENT_TOKEN=Ff40cda6d962941f9bf447732c4564ec5S
+DB_SERVER=seu_servidor.database.windows.net
+DB_DATABASE=nome_do_banco
+DB_USER=usuario_banco
+DB_PASSWORD=senha_banco
+OPENAI_API_KEY=sua_chave_openai_aqui
+ZAPI_INSTANCE_ID=sua_instance_id
+ZAPI_TOKEN=seu_token
+ZAPI_CLIENT_TOKEN=seu_client_token
 ZAPI_BASE_URL=https://api.z-api.io/instances
 PORT=3000
 NODE_ENV=production
