@@ -31,7 +31,7 @@ DB_USER=usuario_banco
 DB_PASSWORD=senha_banco
 
 # OPENAI
-OPENAI_API_KEY=sua_chave_openai
+OPENAI_API_KEY=configure_sua_chave_aqui
 
 # Z-API  
 ZAPI_INSTANCE_ID=sua_instance_id
