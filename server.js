@@ -335,6 +335,24 @@ async function getCoordenadorProjeto(projeto) {
     }
 }
 
+// Função para buscar usuários de QUALIDADE
+async function getUsuariosQualidade() {
+    try {
+        const pool = sql.pool || await sql.connect(dbConfig);
+        const result = await pool.request()
+            .query(`
+                SELECT USUARIO, TELEFONE, PERFIL 
+                FROM USUARIOS 
+                WHERE PERFIL = 'QUALIDADE'
+            `);
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('❌ Erro ao buscar usuários de qualidade:', error.message);
+        return [];
+    }
+}
+
 // Função para formatar mensagem de aprovação
 function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, boletimDbId) {
     const dados = extractedData.dados_boletim;
@@ -374,22 +392,82 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
     return mensagem;
 }
 
+// Função para formatar mensagem para usuários de QUALIDADE (somente visualização)
+function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, boletimDbId) {
+    const dados = extractedData.dados_boletim;
+    const rateio = extractedData.rateio_producao;
+    
+    let mensagem = `👀 *BOLETIM PARA VISUALIZAÇÃO - QUALIDADE*\n\n`;
+    mensagem += `🆔 *ID BOLETIM:* ${boletimId}\n`;
+    mensagem += `🏛️ *ID BANCO:* ${boletimDbId}\n`;
+    mensagem += `📱 *ENVIADO POR:* ${telefoneOriginal}\n`;
+    mensagem += `📅 *DATA:* ${dados.data.toUpperCase()}\n`;
+    mensagem += `🏗️ *PROJETO:* ${dados.projeto.toUpperCase()}\n`;
+    mensagem += `👨‍💼 *SUPERVISOR:* ${dados.supervisor.toUpperCase()}\n`;
+    mensagem += `🚜 *SERVIÇO:* ${dados.servico.toUpperCase()}\n`;
+    mensagem += `🌱 *FAZENDA:* ${dados.fazenda.toUpperCase()}\n`;
+    mensagem += `📏 *ÁREA REALIZADA:* ${dados.area_realizada.toUpperCase()}\n\n`;
+    
+    mensagem += `👥 *COLABORADORES (${rateio.colaboradores.length}):*\n`;
+    rateio.colaboradores.forEach((collab, i) => {
+        mensagem += `• ${collab.toUpperCase()}\n`;
+    });
+    
+    if (extractedData.equipe_apoio.length > 0) {
+        mensagem += `\n🤝 *EQUIPE APOIO:*\n`;
+        extractedData.equipe_apoio.forEach(apoio => {
+            mensagem += `• ${apoio.registro.toUpperCase()} - ${apoio.classe.toUpperCase()}\n`;
+        });
+    }
+    
+    if (dados.observacoes) {
+        mensagem += `\n📝 *OBSERVAÇÕES:* ${dados.observacoes.toUpperCase()}\n`;
+    }
+    
+    mensagem += `\n⚠️ *MENSAGEM SOMENTE PARA VISUALIZAÇÃO*\n`;
+    mensagem += `✅ *AGUARDANDO APROVAÇÃO DO COORDENADOR*`;
+    
+    return mensagem;
+}
+
 // Função para processar aprovação
-async function processarAprovacao(phone, messageText, res) {
+async function processarAprovacao(phone, messageText, res, boletimId = null) {
     try {
         console.log('🔍 Processando aprovação...');
         console.log('📱 Telefone original:', phone);
+        console.log('🆔 Boletim ID específico:', boletimId);
         
-        // Normalizar telefone (usar apenas números)
-        const telefoneNormalizado = phone.replace(/[^\d]/g, '');
-        console.log('📱 Telefone normalizado:', telefoneNormalizado);
+        let boletimPendente = null;
+        let chaveBoletim = null;
+        
+        if (boletimId) {
+            // Se temos ID específico, buscar por ele
+            boletimPendente = boletisPendentes.get(boletimId);
+            chaveBoletim = boletimId;
+            console.log(`🔍 Buscando boletim específico ID: ${boletimId}`);
+        } else {
+            // Lógica antiga - buscar por telefone (fallback)
+            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+            console.log('📱 Telefone normalizado:', telefoneNormalizado);
+            
+            // Buscar qualquer boletim pendente para este coordenador
+            for (const [id, boletim] of boletisPendentes.entries()) {
+                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
+                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
+                    boletimPendente = boletim;
+                    chaveBoletim = id;
+                    break;
+                }
+            }
+        }
+        
         console.log('🗂️ Boletins pendentes:', Array.from(boletisPendentes.keys()));
         
-        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
-        
         if (!boletimPendente) {
-            console.log('❌ Boletim não encontrado para telefone:', telefoneNormalizado);
-            await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
+            console.log('❌ Boletim não encontrado');
+            await sendWhatsAppMessage(phone, boletimId ? 
+                `❌ Boletim ID ${boletimId} não encontrado ou já processado.` : 
+                "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
         
@@ -397,7 +475,7 @@ async function processarAprovacao(phone, messageText, res) {
         await atualizarStatusBoletim(boletimPendente.boletimDbId, 'APROVADO', phone);
         
         // Remover da lista de pendentes
-        boletisPendentes.delete(telefoneNormalizado);
+        boletisPendentes.delete(chaveBoletim);
         
         // Enviar aprovação para o funcionário
         const mensagemAprovacao = `✅ *BOLETIM APROVADO!*
@@ -450,15 +528,40 @@ async function atualizarStatusBoletim(boletimId, status, aprovadoPor) {
 }
 
 // Função para processar correção
-async function processarCorrecao(phone, messageText, res) {
+async function processarCorrecao(phone, messageText, res, boletimId = null) {
     try {
-        // Normalizar telefone (usar apenas números)
-        const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+        console.log('🔄 Processando correção...');
+        console.log('📱 Telefone original:', phone);
+        console.log('🆔 Boletim ID específico:', boletimId);
         
-        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
+        let boletimPendente = null;
+        let chaveBoletim = null;
+        
+        if (boletimId) {
+            // Se temos ID específico, buscar por ele
+            boletimPendente = boletisPendentes.get(boletimId);
+            chaveBoletim = boletimId;
+            console.log(`🔍 Buscando boletim específico ID: ${boletimId}`);
+        } else {
+            // Lógica antiga - buscar por telefone (fallback)
+            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+            console.log('📱 Telefone normalizado:', telefoneNormalizado);
+            
+            // Buscar qualquer boletim pendente para este coordenador
+            for (const [id, boletim] of boletisPendentes.entries()) {
+                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
+                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
+                    boletimPendente = boletim;
+                    chaveBoletim = id;
+                    break;
+                }
+            }
+        }
         
         if (!boletimPendente) {
-            await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para correção.");
+            await sendWhatsAppMessage(phone, boletimId ? 
+                `❌ Boletim ID ${boletimId} não encontrado ou já processado.` : 
+                "❌ Nenhum boletim pendente encontrado para correção.");
             return res.status(200).json({ success: true });
         }
         
@@ -469,7 +572,7 @@ async function processarCorrecao(phone, messageText, res) {
         await atualizarStatusBoletim(boletimPendente.boletimDbId, 'REJEITADO', phone);
         
         // Remover da lista de pendentes
-        boletisPendentes.delete(telefoneNormalizado);
+        boletisPendentes.delete(chaveBoletim);
         
         // Enviar solicitação de correção para o funcionário
         const mensagemCorrecao = `🔄 *CORREÇÃO SOLICITADA*
@@ -527,13 +630,35 @@ app.post('/webhook', async (req, res) => {
         console.log('📱 Telefone:', phone);
         console.log('💬 Mensagem:', messageText);
 
+        // Função para extrair ID do boletim de uma resposta
+        async function extrairIdBoletimResposta(messageText, phone) {
+            // Verificar se é uma resposta a mensagem de aprovação
+            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+            
+            // Procurar por boletins pendentes deste coordenador
+            for (const [boletimId, boletim] of boletisPendentes.entries()) {
+                // Verificar se este telefone é um coordenador para este boletim
+                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
+                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
+                    console.log(`🎯 ID do boletim encontrado via resposta: ${boletimId}`);
+                    return boletimId;
+                }
+            }
+            console.log('❌ ID do boletim não encontrado via resposta');
+            return null;
+        }
+
         // Verificar se é resposta de aprovação/correção
         if (messageText.trim().startsWith('1') || messageText.toLowerCase().includes('aprovar')) {
-            return await processarAprovacao(phone, messageText, res);
+            // Tentar extrair ID específico do boletim se for uma resposta
+            const boletimId = await extrairIdBoletimResposta(messageText, phone);
+            return await processarAprovacao(phone, messageText, res, boletimId);
         }
         
         if (messageText.trim().startsWith('2') || messageText.toLowerCase().includes('corrigir')) {
-            return await processarCorrecao(phone, messageText, res);
+            // Tentar extrair ID específico do boletim se for uma resposta  
+            const boletimId = await extrairIdBoletimResposta(messageText, phone);
+            return await processarCorrecao(phone, messageText, res, boletimId);
         }
 
         // Processar mensagem com OpenAI
@@ -547,6 +672,9 @@ app.post('/webhook', async (req, res) => {
         // Buscar coordenador do projeto
         const coordenador = await getCoordenadorProjeto(extractedData.dados_boletim.projeto);
         
+        // Buscar usuários de QUALIDADE
+        const usuariosQualidade = await getUsuariosQualidade();
+        
         if (coordenador) {
             // Gerar ID único para o boletim pendente
             const boletimId = Date.now().toString();
@@ -554,11 +682,8 @@ app.post('/webhook', async (req, res) => {
             // Normalizar telefone coordenador (usar apenas números)
             const telefoneCoordenador = coordenador.TELEFONE.replace(/[^\d]/g, '');
             
-            console.log(`🧹 Limpando boletins pendentes anteriores...`);
-            boletisPendentes.clear(); // Limpar todos os pendentes anteriores
-            
-            // Armazenar boletim para aprovação
-            boletisPendentes.set(telefoneCoordenador, {
+            // Armazenar boletim para aprovação usando messageId como chave
+            boletisPendentes.set(boletimId, {
                 id: boletimId,
                 extractedData: extractedData,
                 telefoneOriginal: phone,
@@ -575,6 +700,17 @@ app.post('/webhook', async (req, res) => {
             
             console.log(`📋 Enviando para aprovação - Coordenador: ${coordenador.USUARIO} (${telefoneCoordenador})`);
             await sendWhatsAppMessage(telefoneCoordenador, mensagemAprovacao);
+            
+            // Enviar para usuários de QUALIDADE (somente visualização)
+            if (usuariosQualidade.length > 0) {
+                const mensagemQualidade = formatarMensagemQualidade(extractedData, phone, boletimId, result.boletimId);
+                
+                for (const usuario of usuariosQualidade) {
+                    const telefoneQualidade = usuario.TELEFONE.replace(/[^\d]/g, '');
+                    console.log(`👀 Enviando para visualização - Qualidade: ${usuario.USUARIO} (${telefoneQualidade})`);
+                    await sendWhatsAppMessage(telefoneQualidade, mensagemQualidade);
+                }
+            }
             
             // Enviar confirmação para o funcionário
             const confirmMessage = `📋 *BOLETIM ENVIADO PARA APROVAÇÃO*
