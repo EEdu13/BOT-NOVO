@@ -471,7 +471,7 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
         return String(value).toUpperCase();
     };
     
-    let mensagem = `👀 *BOLETIM PARA VISUALIZAÇÃO - QUALIDADE*\n\n`;
+    let mensagem = `� *APONTAMENTO RESUMIDO DO DIA*\n\n`;
     mensagem += `🆔 *ID BOLETIM:* ${boletimId}\n`;
     mensagem += `🏛️ *ID BANCO:* ${boletimDbId}\n`;
     mensagem += `📱 *ENVIADO POR:* ${telefoneOriginal}\n`;
@@ -499,7 +499,7 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
     }
     
     mensagem += `\n⚠️ *MENSAGEM SOMENTE PARA VISUALIZAÇÃO*\n`;
-    mensagem += `✅ *AGUARDANDO APROVAÇÃO DO COORDENADOR*`;
+    mensagem += `✅ *AGUARDANDO APROVAÇÃO DO SUPERVISOR*`;
     
     return mensagem;
 }
