@@ -265,18 +265,39 @@ async function insertDataToDatabase(extractedData) {
         });
 
         try {
+            // Validação individual dos campos críticos antes da inserção
+            console.log('🔍 Validando campos críticos...');
+            
+            const dataValidada = toDateSafe(dados.data);
+            console.log(`📅 Data validada: ${dataValidada}`);
+            
+            const areaValidada = toDecimalSafe(dados.area_realizada);
+            console.log(`📏 Área validada: ${areaValidada}`);
+            
+            const plantadasValidada = toDecimalSafe(dados.plantadas);
+            console.log(`🌱 Plantadas validada: ${plantadasValidada}`);
+            
+            const descarteValidado = toDecimalSafe(dados.descarte);
+            console.log(`🗑️ Descarte validado: ${descarteValidado}`);
+            
+            console.log('✅ Todos os campos validados, executando query...');
+            
             await boletimRequest.query(boletimQuery);
             console.log('✅ Boletim inserido com sucesso!');
         } catch (queryError) {
             console.error('❌ Erro detalhado na query do boletim:', queryError.message);
-            console.error('📊 Dados que causaram erro:', JSON.stringify({
-                data: dados.data,
-                projeto: dados.projeto,
-                area_realizada: dados.area_realizada,
-                plantadas: dados.plantadas,
-                descarte: dados.descarte,
-                supervisor: dados.supervisor,
-                fazenda: dados.fazenda
+            console.error('📊 Dados originais que causaram erro:', JSON.stringify({
+                data_original: dados.data,
+                projeto_original: dados.projeto,
+                area_realizada_original: dados.area_realizada,
+                plantadas_original: dados.plantadas,
+                descarte_original: dados.descarte,
+                supervisor_original: dados.supervisor,
+                fazenda_original: dados.fazenda,
+                tipo_data: typeof dados.data,
+                tipo_area: typeof dados.area_realizada,
+                tipo_plantadas: typeof dados.plantadas,
+                tipo_descarte: typeof dados.descarte
             }, null, 2));
             throw new Error(`Erro no INSERT do boletim: ${queryError.message}`);
         }
@@ -305,27 +326,45 @@ async function insertDataToDatabase(extractedData) {
         
         // Calcular valor por colaborador (área realizada dividida igualmente)
         const areaRealizada = toDecimalSafe(dados.area_realizada);
-        const valorPorColaborador = areaRealizada / rateio.colaboradores.length;
+        const valorPorColaborador = rateio.colaboradores.length > 0 ? 
+            areaRealizada / rateio.colaboradores.length : 0;
         
-        console.log(`📊 Área realizada: ${areaRealizada}, Valor por colaborador: ${valorPorColaborador}`);
+        console.log(`📊 Área realizada: ${areaRealizada}, Colaboradores: ${rateio.colaboradores.length}, Valor por colaborador: ${valorPorColaborador}`);
+        
+        // Verificar se o valor por colaborador é válido
+        if (isNaN(valorPorColaborador) || !isFinite(valorPorColaborador)) {
+            console.error('❌ Valor por colaborador inválido:', valorPorColaborador);
+            throw new Error(`Valor por colaborador inválido: ${valorPorColaborador}`);
+        }
         
         for (let i = 0; i < rateio.colaboradores.length; i++) {
             if (rateio.colaboradores[i] && rateio.colaboradores[i].trim() !== '') {
-                console.log(`   - Colaborador ${i + 1}: ${rateio.colaboradores[i]} = ${valorPorColaborador}`);
-                const request = pool.request();
-                request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
-                request.input('data', sql.DateTime, toDateSafe(dados.data));
-                request.input('projeto', sql.VarChar, String(dados.projeto || ''));
-                request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
-                request.input('registro', sql.VarChar, String(rateio.colaboradores[i] || ''));
-                request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
-                request.input('atividade', sql.VarChar, String(dados.servico || ''));
-                request.input('producao', sql.Decimal, toDecimalSafe(valorPorColaborador));
-                request.input('classe', sql.VarChar, '');
-                request.input('valor', sql.Decimal, 0);
-                request.input('prefixo', sql.VarChar, '');
-                
-                await request.query(premioQuery);
+                try {
+                    console.log(`   - Colaborador ${i + 1}: ${rateio.colaboradores[i]} = ${valorPorColaborador}`);
+                    const request = pool.request();
+                    request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
+                    request.input('data', sql.DateTime, toDateSafe(dados.data));
+                    request.input('projeto', sql.VarChar, String(dados.projeto || ''));
+                    request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
+                    request.input('registro', sql.VarChar, String(rateio.colaboradores[i] || ''));
+                    request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
+                    request.input('atividade', sql.VarChar, String(dados.servico || ''));
+                    request.input('producao', sql.Decimal, toDecimalSafe(valorPorColaborador));
+                    request.input('classe', sql.VarChar, '');
+                    request.input('valor', sql.Decimal, 0);
+                    request.input('prefixo', sql.VarChar, '');
+                    
+                    await request.query(premioQuery);
+                } catch (premioError) {
+                    console.error(`❌ Erro ao inserir colaborador ${i + 1} (${rateio.colaboradores[i]}):`, premioError.message);
+                    console.error(`📊 Dados do colaborador:`, {
+                        boletimId,
+                        colaborador: rateio.colaboradores[i],
+                        valorPorColaborador,
+                        tipo_valor: typeof valorPorColaborador
+                    });
+                    throw new Error(`Erro no rateio colaborador ${i + 1}: ${premioError.message}`);
+                }
             }
         }
 
