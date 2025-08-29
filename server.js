@@ -286,21 +286,42 @@ async function insertDataToDatabase(extractedData) {
             await boletimRequest.query(boletimQuery);
             console.log('✅ Boletim inserido com sucesso!');
         } catch (queryError) {
-            console.error('❌ Erro detalhado na query do boletim:', queryError.message);
-            console.error('📊 Dados originais que causaram erro:', JSON.stringify({
-                data_original: dados.data,
-                projeto_original: dados.projeto,
-                area_realizada_original: dados.area_realizada,
-                plantadas_original: dados.plantadas,
-                descarte_original: dados.descarte,
-                supervisor_original: dados.supervisor,
-                fazenda_original: dados.fazenda,
-                tipo_data: typeof dados.data,
-                tipo_area: typeof dados.area_realizada,
-                tipo_plantadas: typeof dados.plantadas,
-                tipo_descarte: typeof dados.descarte
-            }, null, 2));
-            throw new Error(`Erro no INSERT do boletim: ${queryError.message}`);
+            console.error('❌ ERRO SQL DETALHADO:');
+            console.error('🔍 Mensagem:', queryError.message);
+            console.error('🔍 Código:', queryError.code);
+            console.error('🔍 Número:', queryError.number);
+            console.error('� Estado:', queryError.state);
+            console.error('🔍 Linha:', queryError.lineNumber);
+            console.error('🔍 Procedimento:', queryError.procName);
+            
+            console.error('📊 DADOS ORIGINAIS QUE CAUSARAM ERRO:');
+            console.error('📅 Data original:', dados.data, '| Tipo:', typeof dados.data);
+            console.error('🏗️ Projeto original:', dados.projeto, '| Tipo:', typeof dados.projeto);
+            console.error('📏 Área original:', dados.area_realizada, '| Tipo:', typeof dados.area_realizada);
+            console.error('🌱 Plantadas original:', dados.plantadas, '| Tipo:', typeof dados.plantadas);
+            console.error('🗑️ Descarte original:', dados.descarte, '| Tipo:', typeof dados.descarte);
+            console.error('👤 Supervisor original:', dados.supervisor, '| Tipo:', typeof dados.supervisor);
+            console.error('🏭 Fazenda original:', dados.fazenda, '| Tipo:', typeof dados.fazenda);
+            console.error('📝 Observação original:', dados.observacao, '| Tipo:', typeof dados.observacao);
+            
+            console.error('🔄 VALORES CONVERTIDOS:');
+            console.error('📅 Data convertida:', toDateSafe(dados.data));
+            console.error('📏 Área convertida:', toDecimalSafe(dados.area_realizada));
+            console.error('🌱 Plantadas convertida:', toDecimalSafe(dados.plantadas));
+            console.error('🗑️ Descarte convertido:', toDecimalSafe(dados.descarte));
+            
+            // Tentar identificar qual campo está causando problema
+            const problematicFields = [];
+            
+            if (!toDateSafe(dados.data)) problematicFields.push('data');
+            if (String(dados.projeto || '').length > 50) problematicFields.push('projeto (muito longo)');
+            if (!Number.isFinite(toDecimalSafe(dados.area_realizada))) problematicFields.push('area_realizada');
+            if (!Number.isFinite(toDecimalSafe(dados.plantadas))) problematicFields.push('plantadas');
+            if (!Number.isFinite(toDecimalSafe(dados.descarte))) problematicFields.push('descarte');
+            
+            console.error('🚨 CAMPOS POTENCIALMENTE PROBLEMÁTICOS:', problematicFields);
+            
+            throw new Error(`Erro SQL detalhado: ${queryError.message} | Campos suspeitos: ${problematicFields.join(', ')}`);
         }
         
         // Pegar o ID do boletim inserido para usar como RAW nos prêmios
