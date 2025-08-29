@@ -22,7 +22,8 @@ const openai = new OpenAI({
 });
 
 // Armazenar boletins pendentes de aprovação (em produção usar Redis ou banco)
-const boletisPendentes = new Map();
+// Estrutura para armazenar boletins pendentes por coordenador
+const boletisPendentes = new Map(); // telefone -> array de boletins
 
 // Configuração Azure SQL Database
 const dbConfig = {
@@ -553,66 +554,99 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         // Normalizar telefone (usar apenas números)
         const telefoneNormalizado = phone.replace(/[^\d]/g, '');
         console.log('📱 Telefone normalizado:', telefoneNormalizado);
-        console.log('🗂️ Boletins pendentes (chaves):', Array.from(boletisPendentes.keys()));
-        console.log('🗂️ Total de boletins pendentes:', boletisPendentes.size);
         
-        // Debug: mostrar detalhes de cada boletim pendente
-        for (const [chave, boletim] of boletisPendentes.entries()) {
-            console.log(`📋 Boletim pendente: chave="${chave}", projeto="${boletim.extractedData.dados_boletim.projeto}", telefoneOriginal="${boletim.telefoneOriginal}"`);
-        }
+        const boletinsArray = boletisPendentes.get(telefoneNormalizado);
+        console.log(`🗂️ Boletins pendentes para ${telefoneNormalizado}:`, boletinsArray?.length || 0);
         
-        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
-        
-        if (!boletimPendente) {
-            console.log('❌ Boletim não encontrado para telefone:', telefoneNormalizado);
-            
-            // Debug adicional: verificar se existe algum boletim para este coordenador
-            let encontrouAlgum = false;
-            for (const [chave, boletim] of boletisPendentes.entries()) {
-                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
-                if (coordenador) {
-                    const telCoordenador = coordenador.TELEFONE.replace(/[^\d]/g, '');
-                    console.log(`🔍 Comparando: "${telefoneNormalizado}" vs "${telCoordenador}" (projeto: ${boletim.extractedData.dados_boletim.projeto})`);
-                    if (telCoordenador === telefoneNormalizado) {
-                        console.log(`✅ ENCONTROU! Mas a chave não bateu. Chave usada: "${chave}"`);
-                        encontrouAlgum = true;
-                    }
-                }
-            }
-            
-            if (!encontrouAlgum) {
-                console.log('❌ Nenhum boletim encontrado para este coordenador em nenhuma chave');
-            }
-            
+        if (!boletinsArray || boletinsArray.length === 0) {
+            console.log('❌ Nenhum boletim encontrado para telefone:', telefoneNormalizado);
             await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
         
-        // Atualizar banco de dados - marcar como aprovado
-        await atualizarStatusBoletim(boletimPendente.boletimDbId, 'APROVADO', phone);
+        // Verificar se é aprovação específica por ID (formato: "1 ID" ou "aprovar ID")
+        const match = messageText.match(/(?:1|aprovar)\s+(\d+)/i);
+        let boletimParaAprovar = null;
+        let indiceBoletim = -1;
         
-        // Remover da lista de pendentes
-        boletisPendentes.delete(telefoneNormalizado);
+        if (match) {
+            // Aprovação específica por ID
+            const idEspecifico = match[1];
+            console.log(`🎯 Procurando boletim específico ID: ${idEspecifico}`);
+            
+            indiceBoletim = boletinsArray.findIndex(b => b.id === idEspecifico);
+            if (indiceBoletim !== -1) {
+                boletimParaAprovar = boletinsArray[indiceBoletim];
+                console.log(`✅ Encontrou boletim específico ID: ${idEspecifico}`);
+            } else {
+                await sendWhatsAppMessage(phone, `❌ Boletim ID ${idEspecifico} não encontrado.`);
+                return res.status(200).json({ success: true });
+            }
+        } else {
+            // Aprovação simples - pegar o mais recente
+            if (boletinsArray.length === 1) {
+                boletimParaAprovar = boletinsArray[0];
+                indiceBoletim = 0;
+                console.log(`✅ Único boletim encontrado ID: ${boletimParaAprovar.id}`);
+            } else {
+                // Múltiplos boletins - mostrar lista para escolha
+                let mensagemEscolha = `📋 *MÚLTIPLOS BOLETINS PENDENTES*\n\n`;
+                mensagemEscolha += `Você tem ${boletinsArray.length} boletins aguardando aprovação:\n\n`;
+                
+                boletinsArray.forEach((boletim, index) => {
+                    const dados = boletim.extractedData.dados_boletim;
+                    mensagemEscolha += `🆔 *${boletim.id}*\n`;
+                    mensagemEscolha += `📅 ${dados.data} | 🏗️ ${dados.projeto}\n`;
+                    mensagemEscolha += `🌱 ${dados.fazenda} | 📏 ${dados.area_realizada}\n\n`;
+                });
+                
+                mensagemEscolha += `*Para aprovar específico:*\n`;
+                mensagemEscolha += `Digite: *1 ID* (ex: 1 ${boletinsArray[0].id})\n\n`;
+                mensagemEscolha += `*Para aprovar o mais recente:*\n`;
+                mensagemEscolha += `Digite apenas: *1*`;
+                
+                await sendWhatsAppMessage(phone, mensagemEscolha);
+                
+                // Aprovar o mais recente automaticamente se não especificou ID
+                boletimParaAprovar = boletinsArray[boletinsArray.length - 1];
+                indiceBoletim = boletinsArray.length - 1;
+                console.log(`✅ Aprovando mais recente ID: ${boletimParaAprovar.id}`);
+            }
+        }
+        
+        // Atualizar banco de dados - marcar como aprovado
+        await atualizarStatusBoletim(boletimParaAprovar.boletimDbId, 'APROVADO', phone);
+        
+        // Remover o boletim específico da lista
+        boletinsArray.splice(indiceBoletim, 1);
+        
+        // Se não há mais boletins para este coordenador, remover a entrada
+        if (boletinsArray.length === 0) {
+            boletisPendentes.delete(telefoneNormalizado);
+        }
+        
+        console.log(`✅ Boletim ${boletimParaAprovar.id} aprovado e removido da lista`);
+        console.log(`📊 Boletins restantes para ${telefoneNormalizado}: ${boletinsArray.length}`);
         
         // Enviar aprovação para o funcionário
         const mensagemAprovacao = `✅ *BOLETIM APROVADO!*
 
-🆔 *ID Boletim:* ${boletimPendente.id}
-🏛️ *ID Banco:* ${boletimPendente.boletimDbId}
+🆔 *ID Boletim:* ${boletimParaAprovar.id}
+🏛️ *ID Banco:* ${boletimParaAprovar.boletimDbId}
 👨‍💼 Aprovado por: Coordenador
 📅 Data: ${new Date().toLocaleString('pt-BR')}
 
 📊 *Resumo do Boletim:*
-• Projeto: ${boletimPendente.extractedData.dados_boletim.projeto}
-• Fazenda: ${boletimPendente.extractedData.dados_boletim.fazenda}
-• Área Realizada: ${boletimPendente.extractedData.dados_boletim.area_realizada}
+• Projeto: ${boletimParaAprovar.extractedData.dados_boletim.projeto}
+• Fazenda: ${boletimParaAprovar.extractedData.dados_boletim.fazenda}
+• Área Realizada: ${boletimParaAprovar.extractedData.dados_boletim.area_realizada}
 
 💾 Dados confirmados no sistema!`;
 
-        await sendWhatsAppMessage(boletimPendente.telefoneOriginal, mensagemAprovacao);
+        await sendWhatsAppMessage(boletimParaAprovar.telefoneOriginal, mensagemAprovacao);
         
         // Confirmar para o coordenador
-        await sendWhatsAppMessage(phone, `✅ Boletim aprovado com sucesso! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimPendente.id}\n🏛️ *ID Banco:* ${boletimPendente.boletimDbId}`);
+        await sendWhatsAppMessage(phone, `✅ Boletim aprovado com sucesso! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimParaAprovar.id}\n🏛️ *ID Banco:* ${boletimParaAprovar.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
         
         return res.status(200).json({ success: true });
         
@@ -650,44 +684,85 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
         // Normalizar telefone (usar apenas números)
         const telefoneNormalizado = phone.replace(/[^\d]/g, '');
         
-        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
-        
-        if (!boletimPendente) {
+        if (!boletisPendentes.has(telefoneNormalizado)) {
             await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para correção.");
             return res.status(200).json({ success: true });
+        }
+
+        const boletinsArray = boletisPendentes.get(telefoneNormalizado);
+        
+        if (boletinsArray.length === 0) {
+            await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para correção.");
+            boletisPendentes.delete(telefoneNormalizado);
+            return res.status(200).json({ success: true });
+        }
+
+        console.log(`📋 CORREÇÃO - Coordenador: ${telefoneNormalizado}, Boletins disponíveis: ${boletinsArray.length}`);
+
+        // Extrair ID se especificado na mensagem
+        const idMatch = messageText.match(/ID\s*:?\s*(\w+)/i);
+        let boletimParaCorrigir;
+        let indiceParaRemover;
+
+        if (idMatch) {
+            const idEspecificado = idMatch[1].trim();
+            console.log(`🎯 ID especificado para correção: ${idEspecificado}`);
+            
+            indiceParaRemover = boletinsArray.findIndex(b => b.id === idEspecificado);
+            if (indiceParaRemover !== -1) {
+                boletimParaCorrigir = boletinsArray[indiceParaRemover];
+                console.log(`✅ Boletim encontrado para correção: ${boletimParaCorrigir.id}`);
+            } else {
+                await sendWhatsAppMessage(phone, `❌ Boletim com ID ${idEspecificado} não encontrado!`);
+                return res.status(200).json({ success: true });
+            }
+        } else {
+            // Usar o boletim mais recente (último do array)
+            indiceParaRemover = boletinsArray.length - 1;
+            boletimParaCorrigir = boletinsArray[indiceParaRemover];
+            console.log(`🔄 Nenhum ID especificado, usando boletim mais recente: ${boletimParaCorrigir.id}`);
         }
         
         // Extrair observação (tudo após "2 - CORRIGIR")
         const observacao = messageText.replace(/^2\s*-?\s*CORRIGIR\s*/i, '').trim();
         
         // Atualizar banco de dados - marcar como rejeitado
-        await atualizarStatusBoletim(boletimPendente.boletimDbId, 'REJEITADO', phone);
+        await atualizarStatusBoletim(boletimParaCorrigir.boletimDbId, 'REJEITADO', phone);
         
-        // Remover da lista de pendentes
-        boletisPendentes.delete(telefoneNormalizado);
+        // Remover o boletim específico do array
+        boletinsArray.splice(indiceParaRemover, 1);
+        
+        // Se não há mais boletins, remover o telefone do Map
+        if (boletinsArray.length === 0) {
+            boletisPendentes.delete(telefoneNormalizado);
+            console.log(`📱 Removido telefone ${telefoneNormalizado} do Map (sem boletins restantes)`);
+        } else {
+            boletisPendentes.set(telefoneNormalizado, boletinsArray);
+            console.log(`📱 Telefone ${telefoneNormalizado} mantido no Map com ${boletinsArray.length} boletins restantes`);
+        }
         
         // Enviar solicitação de correção para o funcionário
         const mensagemCorrecao = `🔄 *CORREÇÃO SOLICITADA*
 
-🆔 *ID Boletim:* ${boletimPendente.id}
-🏛️ *ID Banco:* ${boletimPendente.boletimDbId}
+🆔 *ID Boletim:* ${boletimParaCorrigir.id}
+🏛️ *ID Banco:* ${boletimParaCorrigir.boletimDbId}
 👨‍💼 Solicitado por: Coordenador
 📅 Data: ${new Date().toLocaleString('pt-BR')}
 
 📋 *Boletim Original:*
-• Projeto: ${boletimPendente.extractedData.dados_boletim.projeto}
-• Fazenda: ${boletimPendente.extractedData.dados_boletim.fazenda}
-• Área Realizada: ${boletimPendente.extractedData.dados_boletim.area_realizada}
+• Projeto: ${boletimParaCorrigir.extractedData.dados_boletim.projeto}
+• Fazenda: ${boletimParaCorrigir.extractedData.dados_boletim.fazenda}
+• Área Realizada: ${boletimParaCorrigir.extractedData.dados_boletim.area_realizada}
 
 📝 *Observação:*
 ${observacao || 'Nenhuma observação específica'}
 
 🔄 Por favor, corrija e reenvie o boletim.`;
 
-        await sendWhatsAppMessage(boletimPendente.telefoneOriginal, mensagemCorrecao);
+        await sendWhatsAppMessage(boletimParaCorrigir.telefoneOriginal, mensagemCorrecao);
         
         // Confirmar para o coordenador
-        await sendWhatsAppMessage(phone, `🔄 Solicitação de correção enviada! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimPendente.id}\n🏛️ *ID Banco:* ${boletimPendente.boletimDbId}`);
+        await sendWhatsAppMessage(phone, `🔄 Solicitação de correção enviada! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimParaCorrigir.id}\n🏛️ *ID Banco:* ${boletimParaCorrigir.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
         
         return res.status(200).json({ success: true });
         
@@ -752,18 +827,25 @@ app.post('/webhook', async (req, res) => {
             // Normalizar telefone coordenador (usar apenas números)
             const telefoneCoordenador = coordenador.TELEFONE.replace(/[^\d]/g, '');
             
-            // Armazenar boletim para aprovação usando telefone normalizado como chave (temporário)
-            boletisPendentes.set(telefoneCoordenador, {
+            // Armazenar boletim para aprovação (permitir múltiplos por coordenador)
+            if (!boletisPendentes.has(telefoneCoordenador)) {
+                boletisPendentes.set(telefoneCoordenador, []);
+            }
+            
+            const novoBoletim = {
                 id: boletimId,
                 extractedData: extractedData,
                 telefoneOriginal: phone,
                 timestamp: new Date(),
-                boletimDbId: result.boletimId // Guardar ID do banco para atualizar depois
-            });
+                boletimDbId: result.boletimId
+            };
+            
+            boletisPendentes.get(telefoneCoordenador).push(novoBoletim);
             
             console.log(`📞 Telefone do coordenador original: ${coordenador.TELEFONE}`);
             console.log(`📞 Telefone do coordenador normalizado: ${telefoneCoordenador}`);
-            console.log(`🗂️ Boletins pendentes após inserção:`, Array.from(boletisPendentes.keys()));
+            console.log(`🗂️ Boletins pendentes para ${telefoneCoordenador}:`, boletisPendentes.get(telefoneCoordenador).length);
+            console.log(`🗂️ Total coordenadores com boletins:`, boletisPendentes.size);
             
             // Formatar e enviar mensagem para coordenador
             const mensagemAprovacao = formatarMensagemAprovacao(extractedData, phone, boletimId, result.boletimId);
