@@ -488,11 +488,40 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
     const dados = extractedData.dados_boletim;
     const rateio = extractedData.rateio_producao;
     
+    // Função para formatar data no padrão brasileiro DD/MM/AA
+    const formatarDataBrasileira = (data) => {
+        if (!data) return '';
+        
+        // Se já está no formato DD/MM/YYYY, converter para DD/MM/AA
+        if (data.includes('/')) {
+            const partes = data.split('/');
+            if (partes.length === 3) {
+                const dia = partes[0].padStart(2, '0');
+                const mes = partes[1].padStart(2, '0');
+                const ano = partes[2].length === 4 ? partes[2].slice(-2) : partes[2];
+                return `${dia}/${mes}/${ano}`;
+            }
+        }
+        
+        // Se está no formato YYYY-MM-DD, converter
+        if (data.includes('-')) {
+            const partes = data.split('-');
+            if (partes.length === 3) {
+                const ano = partes[0].slice(-2);
+                const mes = partes[1].padStart(2, '0');
+                const dia = partes[2].padStart(2, '0');
+                return `${dia}/${mes}/${ano}`;
+            }
+        }
+        
+        return data; // Retorna como está se não conseguir converter
+    };
+    
     let mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
     mensagem += `🆔 *ID Boletim:* ${boletimId}\n`;
     mensagem += `🏛️ *ID Banco:* ${boletimDbId}\n`;
     mensagem += `📱 *Enviado por:* ${telefoneOriginal}\n`;
-    mensagem += `📅 *Data:* ${dados.data}\n`;
+    mensagem += `📅 *Data:* ${formatarDataBrasileira(dados.data)}\n`;
     mensagem += `🏗️ *Projeto:* ${dados.projeto}\n`;
     mensagem += `👨‍💼 *Supervisor:* ${dados.supervisor}\n`;
     mensagem += `� *Líder:* ${dados.lider}\n`;
