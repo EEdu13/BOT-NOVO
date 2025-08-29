@@ -569,69 +569,53 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
 // Função para processar aprovação
 async function processarAprovacao(phone, messageText, res, boletimId = null) {
     try {
-        console.log('🔍 Processando aprovação...');
-        console.log('📱 Telefone original:', phone);
-        
         // Normalizar telefone (usar apenas números)
         const telefoneNormalizado = phone.replace(/[^\d]/g, '');
-        console.log('📱 Telefone normalizado:', telefoneNormalizado);
         
         const boletinsArray = boletisPendentes.get(telefoneNormalizado);
-        console.log(`🗂️ Boletins pendentes para ${telefoneNormalizado}:`, boletinsArray?.length || 0);
         
         if (!boletinsArray || boletinsArray.length === 0) {
-            console.log('❌ Nenhum boletim encontrado para telefone:', telefoneNormalizado);
             await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
         
-        // Verificar se é aprovação específica por ID (formato: "1 ID" ou "aprovar ID")
-        const match = messageText.match(/(?:1|aprovar)\s+(\d+)/i);
+        // Verificar se é aprovação específica por ID do banco (formato: "APROVAR 123")
+        const match = messageText.match(/APROVAR\s+(\d+)/i);
         let boletimParaAprovar = null;
         let indiceBoletim = -1;
         
         if (match) {
-            // Aprovação específica por ID
-            const idEspecifico = match[1];
-            console.log(`🎯 Procurando boletim específico ID: ${idEspecifico}`);
+            // Aprovação específica por ID do banco
+            const idBanco = match[1];
             
-            indiceBoletim = boletinsArray.findIndex(b => b.id === idEspecifico);
+            indiceBoletim = boletinsArray.findIndex(b => b.boletimDbId == idBanco);
             if (indiceBoletim !== -1) {
                 boletimParaAprovar = boletinsArray[indiceBoletim];
-                console.log(`✅ Encontrou boletim específico ID: ${idEspecifico}`);
             } else {
-                await sendWhatsAppMessage(phone, `❌ Boletim ID ${idEspecifico} não encontrado.`);
+                await sendWhatsAppMessage(phone, `❌ Boletim ID ${idBanco} não encontrado.`);
                 return res.status(200).json({ success: true });
             }
         } else {
-            // Aprovação simples - pegar o mais recente
+            // Aprovação simples - se só tem um boletim, aprova; se tem vários, mostra lista
             if (boletinsArray.length === 1) {
                 boletimParaAprovar = boletinsArray[0];
                 indiceBoletim = 0;
-                console.log(`✅ Único boletim encontrado ID: ${boletimParaAprovar.id}`);
             } else {
                 // Múltiplos boletins - mostrar lista para escolha
-                let mensagemEscolha = `📋 *MÚLTIPLOS BOLETINS PENDENTES*\n\n`;
-                mensagemEscolha += `Você tem ${boletinsArray.length} boletins aguardando aprovação:\n\n`;
+                let mensagemEscolha = `📋 *BOLETINS PENDENTES*\n\n`;
                 
                 boletinsArray.forEach((boletim, index) => {
                     const dados = boletim.extractedData.dados_boletim;
-                    mensagemEscolha += `🆔 *${boletim.id}*\n`;
+                    mensagemEscolha += `📄 *ID: ${boletim.boletimDbId}*\n`;
                     mensagemEscolha += `📅 ${dados.data} | 🏗️ ${dados.projeto}\n`;
                     mensagemEscolha += `🌱 ${dados.fazenda} | 📏 ${dados.area_realizada}\n\n`;
                 });
                 
-                mensagemEscolha += `*Para aprovar específico:*\n`;
-                mensagemEscolha += `Digite: *1 ID* (ex: 1 ${boletinsArray[0].id})\n\n`;
-                mensagemEscolha += `*Para aprovar o mais recente:*\n`;
-                mensagemEscolha += `Digite apenas: *1*`;
+                mensagemEscolha += `*Para aprovar:*\n`;
+                mensagemEscolha += `Digite: *APROVAR ID* (ex: APROVAR ${boletinsArray[0].boletimDbId})`;
                 
                 await sendWhatsAppMessage(phone, mensagemEscolha);
-                
-                // Aprovar o mais recente automaticamente se não especificou ID
-                boletimParaAprovar = boletinsArray[boletinsArray.length - 1];
-                indiceBoletim = boletinsArray.length - 1;
-                console.log(`✅ Aprovando mais recente ID: ${boletimParaAprovar.id}`);
+                return res.status(200).json({ success: true });
             }
         }
         
@@ -718,30 +702,25 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
             return res.status(200).json({ success: true });
         }
 
-        console.log(`📋 CORREÇÃO - Coordenador: ${telefoneNormalizado}, Boletins disponíveis: ${boletinsArray.length}`);
-
-        // Extrair ID se especificado na mensagem
-        const idMatch = messageText.match(/ID\s*:?\s*(\w+)/i);
+        // Extrair ID do banco se especificado na mensagem (formato: CORRIGIR 123)
+        const idBancoMatch = messageText.match(/CORRIGIR\s+(\d+)/i);
         let boletimParaCorrigir;
         let indiceParaRemover;
 
-        if (idMatch) {
-            const idEspecificado = idMatch[1].trim();
-            console.log(`🎯 ID especificado para correção: ${idEspecificado}`);
+        if (idBancoMatch) {
+            const idBanco = idBancoMatch[1];
             
-            indiceParaRemover = boletinsArray.findIndex(b => b.id === idEspecificado);
+            indiceParaRemover = boletinsArray.findIndex(b => b.boletimDbId == idBanco);
             if (indiceParaRemover !== -1) {
                 boletimParaCorrigir = boletinsArray[indiceParaRemover];
-                console.log(`✅ Boletim encontrado para correção: ${boletimParaCorrigir.id}`);
             } else {
-                await sendWhatsAppMessage(phone, `❌ Boletim com ID ${idEspecificado} não encontrado!`);
+                await sendWhatsAppMessage(phone, `❌ Boletim ID ${idBanco} não encontrado!`);
                 return res.status(200).json({ success: true });
             }
         } else {
             // Usar o boletim mais recente (último do array)
             indiceParaRemover = boletinsArray.length - 1;
             boletimParaCorrigir = boletinsArray[indiceParaRemover];
-            console.log(`🔄 Nenhum ID especificado, usando boletim mais recente: ${boletimParaCorrigir.id}`);
         }
         
         // Extrair observação (tudo após "2 - CORRIGIR")
@@ -756,10 +735,8 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
         // Se não há mais boletins, remover o telefone do Map
         if (boletinsArray.length === 0) {
             boletisPendentes.delete(telefoneNormalizado);
-            console.log(`📱 Removido telefone ${telefoneNormalizado} do Map (sem boletins restantes)`);
         } else {
             boletisPendentes.set(telefoneNormalizado, boletinsArray);
-            console.log(`📱 Telefone ${telefoneNormalizado} mantido no Map com ${boletinsArray.length} boletins restantes`);
         }
         
         // Enviar solicitação de correção para o funcionário
@@ -797,11 +774,6 @@ ${observacao || 'Nenhuma observação específica'}
 // Webhook para receber mensagens do Z-API
 app.post('/webhook', async (req, res) => {
     try {
-        console.log('🔔 ===== WEBHOOK RECEBIDO =====');
-        console.log('📋 Dados completos:', JSON.stringify(req.body, null, 2));
-        console.log('🔍 Headers:', JSON.stringify(req.headers, null, 2));
-        console.log('================================');
-        
         // Extrair dados do formato Z-API (múltiplas possibilidades)
         const phone = req.body.phone;
         const messageText = req.body.text?.message || 
@@ -817,19 +789,12 @@ app.post('/webhook', async (req, res) => {
         const isReply = req.body.quotedMsg || req.body.quoted || req.body.contextInfo || req.body.message?.extendedTextMessage?.contextInfo;
         const quotedMessage = req.body.quotedMsg?.body || req.body.quoted?.body || req.body.contextInfo?.quotedMessage?.body || req.body.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
         
-        console.log('📱 Telefone:', phone);
-        console.log('💬 Mensagem:', messageText);
-        console.log('🔄 É Reply?:', !!isReply);
-        console.log('📄 Mensagem Citada:', quotedMessage);
-        
         // Ignorar mensagens enviadas por nós mesmos
         if (fromMe) {
-            console.log('Mensagem enviada por nós - ignorando');
             return res.status(200).json({ success: true, message: 'Mensagem própria ignorada' });
         }
         
         if (!messageText || !phone) {
-            console.log('Mensagem ou telefone não fornecido');
             return res.status(400).json({ error: 'Mensagem ou telefone não fornecido' });
         }
 
@@ -843,21 +808,17 @@ app.post('/webhook', async (req, res) => {
                           (isReply && (messageText.toLowerCase().includes('corrigir') || messageText.trim() === '2'));
         
         if (isAprovacao) {
-            console.log('✅ Detectada aprovação (reply ou mensagem normal)');
             return await processarAprovacao(phone, messageText, res);
         }
         
         if (isCorrecao) {
-            console.log('🔄 Detectada correção (reply ou mensagem normal)');
             return await processarCorrecao(phone, messageText, res);
         }
 
         // Processar mensagem com OpenAI
-        console.log('🤖 Processando mensagem com OpenAI...');
         const extractedData = await processMessageWithAI(messageText);
         
         // Inserir dados no banco
-        console.log('💾 Inserindo dados no banco...');
         const result = await insertDataToDatabase(extractedData);
         
         // Buscar coordenador do projeto
@@ -896,7 +857,6 @@ app.post('/webhook', async (req, res) => {
             // Formatar e enviar mensagem para coordenador
             const mensagemAprovacao = formatarMensagemAprovacao(extractedData, phone, boletimId, result.boletimId);
             
-            console.log(`📋 Enviando para aprovação - Coordenador: ${coordenador.USUARIO} (${telefoneCoordenador})`);
             await sendWhatsAppMessage(telefoneCoordenador, mensagemAprovacao);
             
             // Enviar para usuários de QUALIDADE (somente visualização)
@@ -905,7 +865,6 @@ app.post('/webhook', async (req, res) => {
                 
                 for (const usuario of usuariosQualidade) {
                     const telefoneQualidade = usuario.TELEFONE.replace(/[^\d]/g, '');
-                    console.log(`👀 Enviando para visualização - Qualidade: ${usuario.USUARIO} (${telefoneQualidade})`);
                     await sendWhatsAppMessage(telefoneQualidade, mensagemQualidade);
                 }
             }
