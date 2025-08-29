@@ -776,12 +776,30 @@ ${observacao || 'Nenhuma observação específica'}
 // Webhook para receber mensagens do Z-API
 app.post('/webhook', async (req, res) => {
     try {
-        console.log('Webhook recebido:', JSON.stringify(req.body, null, 2));
+        console.log('🔔 ===== WEBHOOK RECEBIDO =====');
+        console.log('📋 Dados completos:', JSON.stringify(req.body, null, 2));
+        console.log('🔍 Headers:', JSON.stringify(req.headers, null, 2));
+        console.log('================================');
         
-        // Extrair dados do formato Z-API
+        // Extrair dados do formato Z-API (múltiplas possibilidades)
         const phone = req.body.phone;
-        const messageText = req.body.text?.message || req.body.text?.url || req.body.message?.body;
+        const messageText = req.body.text?.message || 
+                          req.body.text?.url || 
+                          req.body.message?.body || 
+                          req.body.message?.conversation || 
+                          req.body.message?.extendedTextMessage?.text ||
+                          req.body.body ||
+                          req.body.content;
         const fromMe = req.body.fromMe;
+        
+        // Verificar se é uma resposta/reply (mensagem citada)
+        const isReply = req.body.quotedMsg || req.body.quoted || req.body.contextInfo || req.body.message?.extendedTextMessage?.contextInfo;
+        const quotedMessage = req.body.quotedMsg?.body || req.body.quoted?.body || req.body.contextInfo?.quotedMessage?.body || req.body.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
+        
+        console.log('📱 Telefone:', phone);
+        console.log('💬 Mensagem:', messageText);
+        console.log('🔄 É Reply?:', !!isReply);
+        console.log('📄 Mensagem Citada:', quotedMessage);
         
         // Ignorar mensagens enviadas por nós mesmos
         if (fromMe) {
@@ -794,15 +812,22 @@ app.post('/webhook', async (req, res) => {
             return res.status(400).json({ error: 'Mensagem ou telefone não fornecido' });
         }
 
-        console.log('📱 Telefone:', phone);
-        console.log('💬 Mensagem:', messageText);
-
-        // Verificar se é resposta de aprovação/correção
-        if (messageText.trim().startsWith('1') || messageText.toLowerCase().includes('aprovar')) {
+        // Verificar se é resposta de aprovação/correção (normal ou reply)
+        const isAprovacao = messageText.trim().startsWith('1') || 
+                           messageText.toLowerCase().includes('aprovar') ||
+                           (isReply && (messageText.toLowerCase().includes('aprovar') || messageText.trim() === '1'));
+                           
+        const isCorrecao = messageText.trim().startsWith('2') || 
+                          messageText.toLowerCase().includes('corrigir') ||
+                          (isReply && (messageText.toLowerCase().includes('corrigir') || messageText.trim() === '2'));
+        
+        if (isAprovacao) {
+            console.log('✅ Detectada aprovação (reply ou mensagem normal)');
             return await processarAprovacao(phone, messageText, res);
         }
         
-        if (messageText.trim().startsWith('2') || messageText.toLowerCase().includes('corrigir')) {
+        if (isCorrecao) {
+            console.log('🔄 Detectada correção (reply ou mensagem normal)');
             return await processarCorrecao(phone, messageText, res);
         }
 
