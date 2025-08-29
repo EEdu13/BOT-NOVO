@@ -164,11 +164,11 @@ async function insertDataToDatabase(extractedData) {
         // 1. Inserir na tabela BOLETIM_DIARIO_COPY
         const boletimQuery = `
             INSERT INTO BOLETIM_DIARIO_COPY (
-                DATA_EXECUÇÃO, PROJETO, LÍDER, SUPERVISOR, NOME_DO_LIDER, 
-                COD, EMPRESA, SERVIÇO, FAZENDA, TALHAO, PRODUÇÃO, STATUS,
-                TIPO, CLONE, PLANTADAS, DESCARTE, LOTE1, INSUMO1, QUANTIDADE1,
-                LOTE2, INSUMO2, QUANTIDADE2, LOTE3, INSUMO3, QUANTIDADE3,
-                OBSERVAÇÃO, CRIADO, CRIADO_POR, MODIFICADO, MODIFICADO_POR
+                [DATA_EXECUÇÃO], [PROJETO], [LÍDER], [SUPERVISOR], [NOME_DO_LIDER], 
+                [COD], [EMPRESA], [SERVIÇO], [FAZENDA], [TALHAO], [PRODUÇÃO], [STATUS],
+                [TIPO], [CLONE], [PLANTADAS], [DESCARTE], [LOTE1], [INSUMO1], [QUANTIDADE1],
+                [LOTE2], [INSUMO2], [QUANTIDADE2], [LOTE3], [INSUMO3], [QUANTIDADE3],
+                [OBSERVAÇÃO], [CRIADO], [CRIADO_POR], [MODIFICADO], [MODIFICADO_POR]
             ) VALUES (
                 @data, @projeto, @equipe, @supervisor, @lider,
                 @cod, @empresa, @servico, @fazenda, @talhao, @area_realizada, @status,
@@ -185,7 +185,9 @@ async function insertDataToDatabase(extractedData) {
         const toDecimalSafe = (value) => {
             if (value === null || value === undefined || value === '') return 0;
             const num = parseFloat(String(value).replace(',', '.'));
-            return isNaN(num) ? 0 : num;
+            const result = isNaN(num) ? 0 : num;
+            console.log(`🔢 Conversão decimal: "${value}" → ${result}`);
+            return result;
         };
         
         const toDateSafe = (value) => {
@@ -196,6 +198,7 @@ async function insertDataToDatabase(extractedData) {
             
             // Tentar converter string para data
             let dateStr = String(value);
+            console.log(`📅 Conversão data: "${value}" → processando...`);
             
             // Diferentes formatos possíveis
             if (dateStr.includes('/')) {
@@ -206,15 +209,21 @@ async function insertDataToDatabase(extractedData) {
                     const day = parseInt(parts[0]);
                     const month = parseInt(parts[1]) - 1; // Mês começa em 0
                     const year = parseInt(parts[2]);
-                    return new Date(year, month, day);
+                    const result = new Date(year, month, day);
+                    console.log(`📅 Data convertida: ${result}`);
+                    return result;
                 }
             } else if (dateStr.includes('-')) {
                 // Formato YYYY-MM-DD
-                return new Date(dateStr);
+                const result = new Date(dateStr);
+                console.log(`📅 Data convertida: ${result}`);
+                return result;
             }
             
             // Fallback para data atual se não conseguir converter
-            return new Date();
+            const fallback = new Date();
+            console.log(`📅 Data fallback: ${fallback}`);
+            return fallback;
         };
         
         boletimRequest.input('data', sql.DateTime, toDateSafe(dados.data));
@@ -247,7 +256,30 @@ async function insertDataToDatabase(extractedData) {
         boletimRequest.input('quantidade3', sql.Decimal, toDecimalSafe(insumos[2]?.quantidade));
         boletimRequest.input('observacao', sql.VarChar, String(dados.observacao || ''));
 
-        await boletimRequest.query(boletimQuery);
+        console.log('📊 Dados sendo inseridos:', {
+            data: toDateSafe(dados.data),
+            projeto: String(dados.projeto || ''),
+            area_realizada: toDecimalSafe(dados.area_realizada),
+            plantadas: toDecimalSafe(dados.plantadas),
+            descarte: toDecimalSafe(dados.descarte)
+        });
+
+        try {
+            await boletimRequest.query(boletimQuery);
+            console.log('✅ Boletim inserido com sucesso!');
+        } catch (queryError) {
+            console.error('❌ Erro detalhado na query do boletim:', queryError.message);
+            console.error('📊 Dados que causaram erro:', JSON.stringify({
+                data: dados.data,
+                projeto: dados.projeto,
+                area_realizada: dados.area_realizada,
+                plantadas: dados.plantadas,
+                descarte: dados.descarte,
+                supervisor: dados.supervisor,
+                fazenda: dados.fazenda
+            }, null, 2));
+            throw new Error(`Erro no INSERT do boletim: ${queryError.message}`);
+        }
         
         // Pegar o ID do boletim inserido para usar como RAW nos prêmios
         const boletimIdResult = await pool.request().query('SELECT TOP 1 ID FROM BOLETIM_DIARIO_COPY ORDER BY ID DESC');
