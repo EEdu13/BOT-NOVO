@@ -403,20 +403,21 @@ async function getCoordenadorProjeto(projeto) {
     }
 }
 
-// Função para buscar usuários de QUALIDADE
-async function getUsuariosQualidade() {
+// Função para buscar usuários de QUALIDADE por projeto
+async function getUsuariosQualidadePorProjeto(projeto) {
     try {
         const pool = sql.pool || await sql.connect(dbConfig);
         const result = await pool.request()
+            .input('projeto', sql.VarChar, projeto)
             .query(`
-                SELECT USUARIO, TELEFONE, PERFIL 
+                SELECT USUARIO, TELEFONE, PERFIL, PROJETO 
                 FROM USUARIOS 
-                WHERE PERFIL = 'QUALIDADE'
+                WHERE PERFIL = 'QUALIDADE' AND PROJETO = @projeto
             `);
         
         return result.recordset;
     } catch (error) {
-        console.error('❌ Erro ao buscar usuários de qualidade:', error.message);
+        console.error('❌ Erro ao buscar usuários de qualidade por projeto:', error.message);
         return [];
     }
 }
@@ -513,12 +514,37 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         // Normalizar telefone (usar apenas números)
         const telefoneNormalizado = phone.replace(/[^\d]/g, '');
         console.log('📱 Telefone normalizado:', telefoneNormalizado);
-        console.log('🗂️ Boletins pendentes:', Array.from(boletisPendentes.keys()));
+        console.log('🗂️ Boletins pendentes (chaves):', Array.from(boletisPendentes.keys()));
+        console.log('🗂️ Total de boletins pendentes:', boletisPendentes.size);
+        
+        // Debug: mostrar detalhes de cada boletim pendente
+        for (const [chave, boletim] of boletisPendentes.entries()) {
+            console.log(`📋 Boletim pendente: chave="${chave}", projeto="${boletim.extractedData.dados_boletim.projeto}", telefoneOriginal="${boletim.telefoneOriginal}"`);
+        }
         
         const boletimPendente = boletisPendentes.get(telefoneNormalizado);
         
         if (!boletimPendente) {
             console.log('❌ Boletim não encontrado para telefone:', telefoneNormalizado);
+            
+            // Debug adicional: verificar se existe algum boletim para este coordenador
+            let encontrouAlgum = false;
+            for (const [chave, boletim] of boletisPendentes.entries()) {
+                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
+                if (coordenador) {
+                    const telCoordenador = coordenador.TELEFONE.replace(/[^\d]/g, '');
+                    console.log(`🔍 Comparando: "${telefoneNormalizado}" vs "${telCoordenador}" (projeto: ${boletim.extractedData.dados_boletim.projeto})`);
+                    if (telCoordenador === telefoneNormalizado) {
+                        console.log(`✅ ENCONTROU! Mas a chave não bateu. Chave usada: "${chave}"`);
+                        encontrouAlgum = true;
+                    }
+                }
+            }
+            
+            if (!encontrouAlgum) {
+                console.log('❌ Nenhum boletim encontrado para este coordenador em nenhuma chave');
+            }
+            
             await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
@@ -677,8 +703,8 @@ app.post('/webhook', async (req, res) => {
         // Buscar coordenador do projeto
         const coordenador = await getCoordenadorProjeto(extractedData.dados_boletim.projeto);
         
-        // Buscar usuários de QUALIDADE
-        const usuariosQualidade = await getUsuariosQualidade();
+        // Buscar usuários de QUALIDADE do mesmo projeto
+        const usuariosQualidade = await getUsuariosQualidadePorProjeto(extractedData.dados_boletim.projeto);
         
         if (coordenador) {
             // Gerar ID único para o boletim pendente
