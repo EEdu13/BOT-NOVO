@@ -397,31 +397,37 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
     const dados = extractedData.dados_boletim;
     const rateio = extractedData.rateio_producao;
     
+    // Função auxiliar para converter para maiúsculas de forma segura
+    const toUpperSafe = (value) => {
+        if (value === null || value === undefined) return '';
+        return String(value).toUpperCase();
+    };
+    
     let mensagem = `👀 *BOLETIM PARA VISUALIZAÇÃO - QUALIDADE*\n\n`;
     mensagem += `🆔 *ID BOLETIM:* ${boletimId}\n`;
     mensagem += `🏛️ *ID BANCO:* ${boletimDbId}\n`;
     mensagem += `📱 *ENVIADO POR:* ${telefoneOriginal}\n`;
-    mensagem += `📅 *DATA:* ${dados.data.toUpperCase()}\n`;
-    mensagem += `🏗️ *PROJETO:* ${dados.projeto.toUpperCase()}\n`;
-    mensagem += `👨‍💼 *SUPERVISOR:* ${dados.supervisor.toUpperCase()}\n`;
-    mensagem += `🚜 *SERVIÇO:* ${dados.servico.toUpperCase()}\n`;
-    mensagem += `🌱 *FAZENDA:* ${dados.fazenda.toUpperCase()}\n`;
-    mensagem += `📏 *ÁREA REALIZADA:* ${dados.area_realizada.toUpperCase()}\n\n`;
+    mensagem += `📅 *DATA:* ${toUpperSafe(dados.data)}\n`;
+    mensagem += `🏗️ *PROJETO:* ${toUpperSafe(dados.projeto)}\n`;
+    mensagem += `👨‍💼 *SUPERVISOR:* ${toUpperSafe(dados.supervisor)}\n`;
+    mensagem += `🚜 *SERVIÇO:* ${toUpperSafe(dados.servico)}\n`;
+    mensagem += `🌱 *FAZENDA:* ${toUpperSafe(dados.fazenda)}\n`;
+    mensagem += `📏 *ÁREA REALIZADA:* ${toUpperSafe(dados.area_realizada)}\n\n`;
     
     mensagem += `👥 *COLABORADORES (${rateio.colaboradores.length}):*\n`;
     rateio.colaboradores.forEach((collab, i) => {
-        mensagem += `• ${collab.toUpperCase()}\n`;
+        mensagem += `• ${toUpperSafe(collab)}\n`;
     });
     
     if (extractedData.equipe_apoio.length > 0) {
         mensagem += `\n🤝 *EQUIPE APOIO:*\n`;
         extractedData.equipe_apoio.forEach(apoio => {
-            mensagem += `• ${apoio.registro.toUpperCase()} - ${apoio.classe.toUpperCase()}\n`;
+            mensagem += `• ${toUpperSafe(apoio.registro)} - ${toUpperSafe(apoio.classe)}\n`;
         });
     }
     
     if (dados.observacoes) {
-        mensagem += `\n📝 *OBSERVAÇÕES:* ${dados.observacoes.toUpperCase()}\n`;
+        mensagem += `\n📝 *OBSERVAÇÕES:* ${toUpperSafe(dados.observacoes)}\n`;
     }
     
     mensagem += `\n⚠️ *MENSAGEM SOMENTE PARA VISUALIZAÇÃO*\n`;
