@@ -464,6 +464,28 @@ async function getCoordenadorProjeto(projeto) {
     }
 }
 
+// Função para buscar coordenador por telefone
+async function getCoordenadorPorTelefone(telefone) {
+    try {
+        const pool = sql.pool || await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('telefone', sql.VarChar, telefone)
+            .query(`
+                SELECT USUARIO, TELEFONE, PERFIL 
+                FROM USUARIOS 
+                WHERE TELEFONE LIKE '%' + @telefone + '%' AND PERFIL = 'COORDENADOR'
+            `);
+        
+        if (result.recordset.length > 0) {
+            return result.recordset[0];
+        }
+        return null;
+    } catch (error) {
+        console.error('❌ Erro ao buscar coordenador por telefone:', error.message);
+        return null;
+    }
+}
+
 // Função para buscar usuários de QUALIDADE por projeto
 async function getUsuariosQualidadePorProjeto(projeto) {
     try {
@@ -489,35 +511,36 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
     const rateio = extractedData.rateio_producao;
     
     let mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
-    mensagem += `🆔 *ID Boletim:* ${boletimId}\n`;
-    mensagem += `🏛️ *ID Banco:* ${boletimDbId}\n`;
+    mensagem += `️ *ID Banco:* ${boletimDbId}\n`;
     mensagem += `📱 *Enviado por:* ${telefoneOriginal}\n`;
     mensagem += `📅 *Data:* ${dados.data}\n`;
     mensagem += `🏗️ *Projeto:* ${dados.projeto}\n`;
     mensagem += `👨‍💼 *Supervisor:* ${dados.supervisor}\n`;
-    mensagem += `🚜 *Serviço:* ${dados.servico}\n`;
+    mensagem += `� *Líder:* ${dados.lider}\n`;
+    mensagem += `�🚜 *Serviço:* ${dados.servico}\n`;
     mensagem += `🌱 *Fazenda:* ${dados.fazenda}\n`;
     mensagem += `📏 *Área Realizada:* ${dados.area_realizada}\n\n`;
     
-    mensagem += `👥 *Colaboradores (${rateio.colaboradores.length}):*\n`;
-    rateio.colaboradores.forEach((collab, i) => {
-        mensagem += `• ${collab}\n`;
+    mensagem += `👥 *Colaboradores (${rateio.colaboradores.length})*\n\n`;
+    
+    // Contar equipe apoio por tipo
+    const equipeApoioCount = {};
+    extractedData.equipe_apoio.forEach(apoio => {
+        const classe = apoio.classe.toUpperCase();
+        equipeApoioCount[classe] = (equipeApoioCount[classe] || 0) + 1;
     });
     
-    if (extractedData.equipe_apoio.length > 0) {
-        mensagem += `\n🤝 *Equipe Apoio:*\n`;
-        extractedData.equipe_apoio.forEach(apoio => {
-            mensagem += `• ${apoio.registro} - ${apoio.classe}\n`;
+    if (Object.keys(equipeApoioCount).length > 0) {
+        mensagem += `🤝 *Equipe Apoio:*\n`;
+        Object.entries(equipeApoioCount).forEach(([classe, quantidade]) => {
+            mensagem += `${quantidade} - ${classe}\n`;
         });
+        mensagem += `\n`;
     }
     
-    if (dados.observacoes) {
-        mensagem += `\n📝 *Obs:* ${dados.observacoes}\n`;
-    }
-    
-    mensagem += `\n*Responda:*\n`;
-    mensagem += `*1* - APROVAR\n`;
-    mensagem += `*2* - CORRIGIR (+ observação)`;
+    mensagem += `*Responda:*\n`;
+    mensagem += `*APROVAR + ID*\n`;
+    mensagem += `*CORRIGIR + ID* (+ observação)`;
     
     return mensagem;
 }
@@ -633,12 +656,15 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         console.log(`✅ Boletim ${boletimParaAprovar.id} aprovado e removido da lista`);
         console.log(`📊 Boletins restantes para ${telefoneNormalizado}: ${boletinsArray.length}`);
         
+        // Buscar nome do coordenador que está aprovando
+        const coordenadorAprovador = await getCoordenadorPorTelefone(telefoneNormalizado);
+        const nomeAprovador = coordenadorAprovador ? coordenadorAprovador.USUARIO : 'Coordenador';
+        
         // Enviar aprovação para o funcionário
         const mensagemAprovacao = `✅ *BOLETIM APROVADO!*
 
-🆔 *ID Boletim:* ${boletimParaAprovar.id}
 🏛️ *ID Banco:* ${boletimParaAprovar.boletimDbId}
-👨‍💼 Aprovado por: Coordenador
+👨‍💼 Aprovado por: ${nomeAprovador}
 📅 Data: ${new Date().toLocaleString('pt-BR')}
 
 📊 *Resumo do Boletim:*
@@ -651,7 +677,7 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         await sendWhatsAppMessage(boletimParaAprovar.telefoneOriginal, mensagemAprovacao);
         
         // Confirmar para o coordenador
-        await sendWhatsAppMessage(phone, `✅ Boletim aprovado com sucesso! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimParaAprovar.id}\n🏛️ *ID Banco:* ${boletimParaAprovar.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
+        await sendWhatsAppMessage(phone, `✅ Boletim aprovado com sucesso! Funcionário foi notificado.\n\n️ *ID Banco:* ${boletimParaAprovar.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
         
         return res.status(200).json({ success: true });
         
@@ -739,12 +765,15 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
             boletisPendentes.set(telefoneNormalizado, boletinsArray);
         }
         
+        // Buscar nome do coordenador que está solicitando correção
+        const coordenadorSolicitante = await getCoordenadorPorTelefone(telefoneNormalizado);
+        const nomeSolicitante = coordenadorSolicitante ? coordenadorSolicitante.USUARIO : 'Coordenador';
+        
         // Enviar solicitação de correção para o funcionário
         const mensagemCorrecao = `🔄 *CORREÇÃO SOLICITADA*
 
-🆔 *ID Boletim:* ${boletimParaCorrigir.id}
 🏛️ *ID Banco:* ${boletimParaCorrigir.boletimDbId}
-👨‍💼 Solicitado por: Coordenador
+👨‍💼 Solicitado por: ${nomeSolicitante}
 📅 Data: ${new Date().toLocaleString('pt-BR')}
 
 📋 *Boletim Original:*
@@ -760,7 +789,7 @@ ${observacao || 'Nenhuma observação específica'}
         await sendWhatsAppMessage(boletimParaCorrigir.telefoneOriginal, mensagemCorrecao);
         
         // Confirmar para o coordenador
-        await sendWhatsAppMessage(phone, `🔄 Solicitação de correção enviada! Funcionário foi notificado.\n\n🆔 *ID Boletim:* ${boletimParaCorrigir.id}\n🏛️ *ID Banco:* ${boletimParaCorrigir.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
+        await sendWhatsAppMessage(phone, `🔄 Solicitação de correção enviada! Funcionário foi notificado.\n\n🏛️ *ID Banco:* ${boletimParaCorrigir.boletimDbId}\n📊 *Restantes:* ${boletinsArray.length}`);
         
         return res.status(200).json({ success: true });
         
@@ -872,8 +901,7 @@ app.post('/webhook', async (req, res) => {
             // Enviar confirmação para o funcionário
             const confirmMessage = `📋 *BOLETIM ENVIADO PARA APROVAÇÃO*
 
-🆔 *ID Boletim:* ${boletimId}
-🏛️ *ID Banco:* ${result.boletimId}
+️ *ID Banco:* ${result.boletimId}
 ✅ Dados processados com sucesso!
 👨‍💼 Enviado para: ${coordenador.USUARIO}
 ⏳ Aguardando aprovação...
