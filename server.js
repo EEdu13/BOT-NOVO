@@ -509,39 +509,17 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
     try {
         console.log('🔍 Processando aprovação...');
         console.log('📱 Telefone original:', phone);
-        console.log('🆔 Boletim ID específico:', boletimId);
         
-        let boletimPendente = null;
-        let chaveBoletim = null;
-        
-        if (boletimId) {
-            // Se temos ID específico, buscar por ele
-            boletimPendente = boletisPendentes.get(boletimId);
-            chaveBoletim = boletimId;
-            console.log(`🔍 Buscando boletim específico ID: ${boletimId}`);
-        } else {
-            // Lógica antiga - buscar por telefone (fallback)
-            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
-            console.log('📱 Telefone normalizado:', telefoneNormalizado);
-            
-            // Buscar qualquer boletim pendente para este coordenador
-            for (const [id, boletim] of boletisPendentes.entries()) {
-                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
-                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
-                    boletimPendente = boletim;
-                    chaveBoletim = id;
-                    break;
-                }
-            }
-        }
-        
+        // Normalizar telefone (usar apenas números)
+        const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+        console.log('📱 Telefone normalizado:', telefoneNormalizado);
         console.log('🗂️ Boletins pendentes:', Array.from(boletisPendentes.keys()));
         
+        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
+        
         if (!boletimPendente) {
-            console.log('❌ Boletim não encontrado');
-            await sendWhatsAppMessage(phone, boletimId ? 
-                `❌ Boletim ID ${boletimId} não encontrado ou já processado.` : 
-                "❌ Nenhum boletim pendente encontrado para aprovação.");
+            console.log('❌ Boletim não encontrado para telefone:', telefoneNormalizado);
+            await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
         
@@ -549,7 +527,7 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         await atualizarStatusBoletim(boletimPendente.boletimDbId, 'APROVADO', phone);
         
         // Remover da lista de pendentes
-        boletisPendentes.delete(chaveBoletim);
+        boletisPendentes.delete(telefoneNormalizado);
         
         // Enviar aprovação para o funcionário
         const mensagemAprovacao = `✅ *BOLETIM APROVADO!*
@@ -604,38 +582,13 @@ async function atualizarStatusBoletim(boletimId, status, aprovadoPor) {
 // Função para processar correção
 async function processarCorrecao(phone, messageText, res, boletimId = null) {
     try {
-        console.log('🔄 Processando correção...');
-        console.log('📱 Telefone original:', phone);
-        console.log('🆔 Boletim ID específico:', boletimId);
+        // Normalizar telefone (usar apenas números)
+        const telefoneNormalizado = phone.replace(/[^\d]/g, '');
         
-        let boletimPendente = null;
-        let chaveBoletim = null;
-        
-        if (boletimId) {
-            // Se temos ID específico, buscar por ele
-            boletimPendente = boletisPendentes.get(boletimId);
-            chaveBoletim = boletimId;
-            console.log(`🔍 Buscando boletim específico ID: ${boletimId}`);
-        } else {
-            // Lógica antiga - buscar por telefone (fallback)
-            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
-            console.log('📱 Telefone normalizado:', telefoneNormalizado);
-            
-            // Buscar qualquer boletim pendente para este coordenador
-            for (const [id, boletim] of boletisPendentes.entries()) {
-                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
-                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
-                    boletimPendente = boletim;
-                    chaveBoletim = id;
-                    break;
-                }
-            }
-        }
+        const boletimPendente = boletisPendentes.get(telefoneNormalizado);
         
         if (!boletimPendente) {
-            await sendWhatsAppMessage(phone, boletimId ? 
-                `❌ Boletim ID ${boletimId} não encontrado ou já processado.` : 
-                "❌ Nenhum boletim pendente encontrado para correção.");
+            await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para correção.");
             return res.status(200).json({ success: true });
         }
         
@@ -646,7 +599,7 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
         await atualizarStatusBoletim(boletimPendente.boletimDbId, 'REJEITADO', phone);
         
         // Remover da lista de pendentes
-        boletisPendentes.delete(chaveBoletim);
+        boletisPendentes.delete(telefoneNormalizado);
         
         // Enviar solicitação de correção para o funcionário
         const mensagemCorrecao = `🔄 *CORREÇÃO SOLICITADA*
@@ -704,35 +657,13 @@ app.post('/webhook', async (req, res) => {
         console.log('📱 Telefone:', phone);
         console.log('💬 Mensagem:', messageText);
 
-        // Função para extrair ID do boletim de uma resposta
-        async function extrairIdBoletimResposta(messageText, phone) {
-            // Verificar se é uma resposta a mensagem de aprovação
-            const telefoneNormalizado = phone.replace(/[^\d]/g, '');
-            
-            // Procurar por boletins pendentes deste coordenador
-            for (const [boletimId, boletim] of boletisPendentes.entries()) {
-                // Verificar se este telefone é um coordenador para este boletim
-                const coordenador = await getCoordenadorProjeto(boletim.extractedData.dados_boletim.projeto);
-                if (coordenador && coordenador.TELEFONE.replace(/[^\d]/g, '') === telefoneNormalizado) {
-                    console.log(`🎯 ID do boletim encontrado via resposta: ${boletimId}`);
-                    return boletimId;
-                }
-            }
-            console.log('❌ ID do boletim não encontrado via resposta');
-            return null;
-        }
-
         // Verificar se é resposta de aprovação/correção
         if (messageText.trim().startsWith('1') || messageText.toLowerCase().includes('aprovar')) {
-            // Tentar extrair ID específico do boletim se for uma resposta
-            const boletimId = await extrairIdBoletimResposta(messageText, phone);
-            return await processarAprovacao(phone, messageText, res, boletimId);
+            return await processarAprovacao(phone, messageText, res);
         }
         
         if (messageText.trim().startsWith('2') || messageText.toLowerCase().includes('corrigir')) {
-            // Tentar extrair ID específico do boletim se for uma resposta  
-            const boletimId = await extrairIdBoletimResposta(messageText, phone);
-            return await processarCorrecao(phone, messageText, res, boletimId);
+            return await processarCorrecao(phone, messageText, res);
         }
 
         // Processar mensagem com OpenAI
@@ -756,8 +687,8 @@ app.post('/webhook', async (req, res) => {
             // Normalizar telefone coordenador (usar apenas números)
             const telefoneCoordenador = coordenador.TELEFONE.replace(/[^\d]/g, '');
             
-            // Armazenar boletim para aprovação usando messageId como chave
-            boletisPendentes.set(boletimId, {
+            // Armazenar boletim para aprovação usando telefone normalizado como chave (temporário)
+            boletisPendentes.set(telefoneCoordenador, {
                 id: boletimId,
                 extractedData: extractedData,
                 telefoneOriginal: phone,
