@@ -181,35 +181,71 @@ async function insertDataToDatabase(extractedData) {
         const boletimRequest = pool.request();
         const dados = extractedData.dados_boletim;
         
-        boletimRequest.input('data', sql.DateTime, new Date(dados.data));
-        boletimRequest.input('projeto', sql.VarChar, dados.projeto);
-        boletimRequest.input('equipe', sql.VarChar, dados.equipe);
-        boletimRequest.input('supervisor', sql.VarChar, dados.supervisor);
-        boletimRequest.input('lider', sql.VarChar, dados.lider);
-        boletimRequest.input('cod', sql.VarChar, dados.cod);
-        boletimRequest.input('empresa', sql.VarChar, dados.empresa);
-        boletimRequest.input('servico', sql.VarChar, dados.servico);
-        boletimRequest.input('fazenda', sql.VarChar, dados.fazenda);
-        boletimRequest.input('talhao', sql.VarChar, dados.talhao);
-        boletimRequest.input('area_realizada', sql.Decimal, dados.area_realizada);
-        boletimRequest.input('status', sql.VarChar, dados.status_talhao);
-        boletimRequest.input('tipo', sql.VarChar, dados.tipo || '');
-        boletimRequest.input('clone', sql.VarChar, dados.clone || '');
-        boletimRequest.input('plantadas', sql.Decimal, dados.plantadas || 0);
-        boletimRequest.input('descarte', sql.Decimal, dados.descarte || 0);
+        // Funções auxiliares para conversões seguras
+        const toDecimalSafe = (value) => {
+            if (value === null || value === undefined || value === '') return 0;
+            const num = parseFloat(String(value).replace(',', '.'));
+            return isNaN(num) ? 0 : num;
+        };
+        
+        const toDateSafe = (value) => {
+            if (!value) return new Date();
+            
+            // Se já é uma data válida
+            if (value instanceof Date) return value;
+            
+            // Tentar converter string para data
+            let dateStr = String(value);
+            
+            // Diferentes formatos possíveis
+            if (dateStr.includes('/')) {
+                // Formato DD/MM/YYYY ou MM/DD/YYYY
+                const parts = dateStr.split('/');
+                if (parts.length === 3) {
+                    // Assumir DD/MM/YYYY
+                    const day = parseInt(parts[0]);
+                    const month = parseInt(parts[1]) - 1; // Mês começa em 0
+                    const year = parseInt(parts[2]);
+                    return new Date(year, month, day);
+                }
+            } else if (dateStr.includes('-')) {
+                // Formato YYYY-MM-DD
+                return new Date(dateStr);
+            }
+            
+            // Fallback para data atual se não conseguir converter
+            return new Date();
+        };
+        
+        boletimRequest.input('data', sql.DateTime, toDateSafe(dados.data));
+        boletimRequest.input('projeto', sql.VarChar, String(dados.projeto || ''));
+        boletimRequest.input('equipe', sql.VarChar, String(dados.equipe || ''));
+        boletimRequest.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
+        boletimRequest.input('lider', sql.VarChar, String(dados.lider || ''));
+        boletimRequest.input('cod', sql.VarChar, String(dados.cod || ''));
+        boletimRequest.input('empresa', sql.VarChar, String(dados.empresa || ''));
+        boletimRequest.input('servico', sql.VarChar, String(dados.servico || ''));
+        boletimRequest.input('fazenda', sql.VarChar, String(dados.fazenda || ''));
+        boletimRequest.input('talhao', sql.VarChar, String(dados.talhao || ''));
+        boletimRequest.input('area_realizada', sql.Decimal, toDecimalSafe(dados.area_realizada));
+        boletimRequest.input('status', sql.VarChar, String(dados.status_talhao || ''));
+        boletimRequest.input('tipo', sql.VarChar, String(dados.tipo || ''));
+        boletimRequest.input('clone', sql.VarChar, String(dados.clone || ''));
+        boletimRequest.input('plantadas', sql.Decimal, toDecimalSafe(dados.plantadas));
+        boletimRequest.input('descarte', sql.Decimal, toDecimalSafe(dados.descarte));
         
         // Insumos
         const insumos = dados.insumos || [];
-        boletimRequest.input('lote1', sql.VarChar, insumos[0]?.lote || '');
-        boletimRequest.input('insumo1', sql.VarChar, insumos[0]?.insumo || '');
-        boletimRequest.input('quantidade1', sql.Decimal, insumos[0]?.quantidade || 0);
-        boletimRequest.input('lote2', sql.VarChar, insumos[1]?.lote || '');
-        boletimRequest.input('insumo2', sql.VarChar, insumos[1]?.insumo || '');
-        boletimRequest.input('quantidade2', sql.Decimal, insumos[1]?.quantidade || 0);
-        boletimRequest.input('lote3', sql.VarChar, insumos[2]?.lote || '');
-        boletimRequest.input('insumo3', sql.VarChar, insumos[2]?.insumo || '');
-        boletimRequest.input('quantidade3', sql.Decimal, insumos[2]?.quantidade || 0);
-        boletimRequest.input('observacao', sql.VarChar, dados.observacao || '');
+        boletimRequest.input('lote1', sql.VarChar, String(insumos[0]?.lote || ''));
+        boletimRequest.input('insumo1', sql.VarChar, String(insumos[0]?.insumo || ''));
+        boletimRequest.input('quantidade1', sql.Decimal, toDecimalSafe(insumos[0]?.quantidade));
+        boletimRequest.input('lote2', sql.VarChar, String(insumos[1]?.lote || ''));
+        boletimRequest.input('insumo2', sql.VarChar, String(insumos[1]?.insumo || ''));
+        boletimRequest.input('quantidade2', sql.Decimal, toDecimalSafe(insumos[1]?.quantidade));
+        boletimRequest.input('lote3', sql.VarChar, String(insumos[2]?.lote || ''));
+        boletimRequest.input('insumo3', sql.VarChar, String(insumos[2]?.insumo || ''));
+        boletimRequest.input('quantidade3', sql.Decimal, toDecimalSafe(insumos[2]?.quantidade));
+        boletimRequest.input('observacao', sql.VarChar, String(dados.observacao || ''));
 
         await boletimRequest.query(boletimQuery);
         
@@ -236,7 +272,7 @@ async function insertDataToDatabase(extractedData) {
         console.log('📊 Inserindo rateio de produção para', rateio.colaboradores.length, 'colaboradores...');
         
         // Calcular valor por colaborador (área realizada dividida igualmente)
-        const areaRealizada = parseFloat(dados.area_realizada) || 0;
+        const areaRealizada = toDecimalSafe(dados.area_realizada);
         const valorPorColaborador = areaRealizada / rateio.colaboradores.length;
         
         console.log(`📊 Área realizada: ${areaRealizada}, Valor por colaborador: ${valorPorColaborador}`);
@@ -246,13 +282,13 @@ async function insertDataToDatabase(extractedData) {
                 console.log(`   - Colaborador ${i + 1}: ${rateio.colaboradores[i]} = ${valorPorColaborador}`);
                 const request = pool.request();
                 request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
-                request.input('data', sql.DateTime, new Date(dados.data));
-                request.input('projeto', sql.VarChar, dados.projeto);
-                request.input('supervisor', sql.VarChar, dados.supervisor);
-                request.input('registro', sql.VarChar, rateio.colaboradores[i]);
+                request.input('data', sql.DateTime, toDateSafe(dados.data));
+                request.input('projeto', sql.VarChar, String(dados.projeto || ''));
+                request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
+                request.input('registro', sql.VarChar, String(rateio.colaboradores[i] || ''));
                 request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
-                request.input('atividade', sql.VarChar, dados.servico);
-                request.input('producao', sql.Decimal, valorPorColaborador);
+                request.input('atividade', sql.VarChar, String(dados.servico || ''));
+                request.input('producao', sql.Decimal, toDecimalSafe(valorPorColaborador));
                 request.input('classe', sql.VarChar, '');
                 request.input('valor', sql.Decimal, 0);
                 request.input('prefixo', sql.VarChar, '');
@@ -266,15 +302,15 @@ async function insertDataToDatabase(extractedData) {
             if (apoio.registro) {
                 const request = pool.request();
                 request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
-                request.input('data', sql.DateTime, new Date(dados.data));
-                request.input('projeto', sql.VarChar, dados.projeto);
-                request.input('supervisor', sql.VarChar, dados.supervisor);
-                request.input('registro', sql.VarChar, apoio.registro);
+                request.input('data', sql.DateTime, toDateSafe(dados.data));
+                request.input('projeto', sql.VarChar, String(dados.projeto || ''));
+                request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
+                request.input('registro', sql.VarChar, String(apoio.registro || ''));
                 request.input('colaborador', sql.VarChar, '');
-                request.input('atividade', sql.VarChar, dados.servico);
+                request.input('atividade', sql.VarChar, String(dados.servico || ''));
                 request.input('producao', sql.Decimal, 0);
-                request.input('classe', sql.VarChar, apoio.classe);
-                request.input('valor', sql.Decimal, apoio.valor);
+                request.input('classe', sql.VarChar, String(apoio.classe || ''));
+                request.input('valor', sql.Decimal, toDecimalSafe(apoio.valor));
                 request.input('prefixo', sql.VarChar, '');
                 
                 await request.query(premioQuery);
@@ -286,16 +322,16 @@ async function insertDataToDatabase(extractedData) {
             if (estrutura.registro) {
                 const request = pool.request();
                 request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
-                request.input('data', sql.DateTime, new Date(dados.data));
-                request.input('projeto', sql.VarChar, dados.projeto);
-                request.input('supervisor', sql.VarChar, dados.supervisor);
-                request.input('registro', sql.VarChar, estrutura.registro);
+                request.input('data', sql.DateTime, toDateSafe(dados.data));
+                request.input('projeto', sql.VarChar, String(dados.projeto || ''));
+                request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
+                request.input('registro', sql.VarChar, String(estrutura.registro || ''));
                 request.input('colaborador', sql.VarChar, '');
-                request.input('atividade', sql.VarChar, dados.servico);
+                request.input('atividade', sql.VarChar, String(dados.servico || ''));
                 request.input('producao', sql.Decimal, 0);
-                request.input('classe', sql.VarChar, estrutura.classe);
-                request.input('valor', sql.Decimal, estrutura.valor);
-                request.input('prefixo', sql.VarChar, estrutura.prefixo);
+                request.input('classe', sql.VarChar, String(estrutura.classe || ''));
+                request.input('valor', sql.Decimal, toDecimalSafe(estrutura.valor));
+                request.input('prefixo', sql.VarChar, String(estrutura.prefixo || ''));
                 
                 await request.query(premioQuery);
             }
