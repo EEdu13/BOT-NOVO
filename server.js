@@ -697,12 +697,57 @@ async function getUsuariosQualidadePorProjeto(projeto) {
 }
 
 // Função para formatar mensagem de aprovação
-function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, boletimDbId) {
-    const dados = extractedData.dados_boletim;
-    const rateio = extractedData.rateio_producao;
+async function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, boletimDbId) {
+    // Buscar dados atualizados do banco
+    const dadosDoBanco = await buscarDadosBoletimPorId(boletimDbId);
     
-    // Função para formatar data no padrão brasileiro DD/MM/AA
-    const formatarDataBrasileira = (data) => {
+    if (dadosDoBanco) {
+        // Usar dados do banco (formatação padrão)
+        const dataFormatada = dadosDoBanco.DATA_BOLETIM ? 
+            new Date(dadosDoBanco.DATA_BOLETIM).toLocaleDateString('pt-BR') : 
+            new Date().toLocaleDateString('pt-BR');
+        
+        const areaFormatada = dadosDoBanco.AREA_REALIZADA ? 
+            String(dadosDoBanco.AREA_REALIZADA).replace('.', ',') : 'N/A';
+        
+        let mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
+        mensagem += `🆔 *ID Boletim:* ${boletimId}\n`;
+        mensagem += `🏛️ *ID Banco:* ${boletimDbId}\n`;
+        mensagem += `📱 *Enviado por:* ${telefoneOriginal}\n`;
+        mensagem += `📅 *Data:* ${dataFormatada}\n`;
+        mensagem += `🏗️ *Projeto:* ${dadosDoBanco.PROJETO || 'N/A'}\n`;
+        mensagem += `👨‍💼 *Supervisor:* ${dadosDoBanco.SUPERVISOR || 'N/A'}\n`;
+        mensagem += `👨‍🔧 *Líder:* ${dadosDoBanco.LIDER || 'N/A'}\n`;
+        mensagem += `🚜 *Serviço:* ${dadosDoBanco.SERVICO || 'PLANTIO'}\n`;
+        mensagem += `🌱 *Fazenda:* ${dadosDoBanco.FAZENDA || 'N/A'}\n`;
+        mensagem += `📏 *Área Realizada:* ${areaFormatada}\n\n`;
+        
+        // Adicionar colaboradores da extração original
+        const rateio = extractedData.rateio_producao;
+        if (rateio && rateio.colaboradores.length > 0) {
+            mensagem += `👥 *Colaboradores (${rateio.colaboradores.length}):*\n`;
+            rateio.colaboradores.forEach((collab, i) => {
+                mensagem += `• ${collab.colaborador}\n`;
+            });
+            mensagem += '\n';
+        }
+        
+        // Adicionar equipe apoio da extração original
+        const equipeApoio = extractedData.equipe_apoio;
+        if (equipeApoio && equipeApoio.length > 0) {
+            mensagem += `🤝 *Equipe Apoio:*\n`;
+            equipeApoio.forEach(apoio => {
+                mensagem += `• ${apoio.registro} - ${apoio.classe}\n`;
+            });
+        }
+        
+    } else {
+        // Fallback para dados da extração original se não encontrar no banco
+        const dados = extractedData.dados_boletim;
+        const rateio = extractedData.rateio_producao;
+        
+        // Função para formatar data no padrão brasileiro DD/MM/AA
+        const formatarDataBrasileira = (data) => {
         if (!data) return '';
         
         // Se já está no formato DD/MM/YYYY, converter para DD/MM/AA
@@ -757,6 +802,7 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
     if (dados.observacoes) {
         mensagem += `\n📝 *Obs:* ${dados.observacoes}\n`;
     }
+    }
     
     // Retornar objeto com mensagem e botões para Z-API
     return {
@@ -764,11 +810,11 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
         buttons: [
             {
                 id: `APROVAR_${boletimDbId}`,
-                title: "✅ APROVAR"
+                title: `APROVAR ${boletimDbId}`
             },
             {
                 id: `CORRIGIR_${boletimDbId}`,
-                title: "❌ CORRIGIR"
+                title: `CORRIGIR ${boletimDbId}`
             }
         ]
     };
@@ -1223,7 +1269,7 @@ app.post('/webhook', async (req, res) => {
             console.log(`🗂️ Total coordenadores com boletins:`, boletisPendentes.size);
             
             // Formatar e enviar mensagem para coordenador
-            const mensagemAprovacao = formatarMensagemAprovacao(extractedData, phone, boletimId, result.boletimId);
+            const mensagemAprovacao = await formatarMensagemAprovacao(extractedData, phone, boletimId, result.boletimId);
             
             await sendWhatsAppMessageWithButtons(telefoneCoordenador, mensagemAprovacao);
             
@@ -1237,8 +1283,28 @@ app.post('/webhook', async (req, res) => {
                 }
             }
             
+            // Buscar dados do banco para confirmação
+            const dadosDoBanco = await buscarDadosBoletimPorId(result.boletimId);
+            
             // Enviar confirmação para o funcionário
-            const confirmMessage = `📋 *BOLETIM ENVIADO PARA APROVAÇÃO*
+            const confirmMessage = dadosDoBanco ? 
+                `📋 *BOLETIM ENVIADO PARA APROVAÇÃO*
+
+🆔 *ID Boletim:* ${boletimId}
+🏛️ *ID Banco:* ${result.boletimId}
+✅ Dados processados com sucesso!
+👨‍💼 Enviado para: ${coordenador.USUARIO}
+⏳ Aguardando aprovação...
+
+📊 *DADOS CONFIRMADOS NO BANCO:*
+• *Projeto:* ${dadosDoBanco.PROJETO || 'N/A'}
+• *Fazenda:* ${dadosDoBanco.FAZENDA || 'N/A'}
+• *Responsável:* ${dadosDoBanco.RESPONSAVEL || 'N/A'}
+• *Supervisor:* ${dadosDoBanco.SUPERVISOR || 'N/A'}
+• *Área Realizada:* ${dadosDoBanco.AREA_REALIZADA ? String(dadosDoBanco.AREA_REALIZADA).replace('.', ',') : 'N/A'} ha
+
+🤖 Você será notificado do resultado!` : 
+                `📋 *BOLETIM ENVIADO PARA APROVAÇÃO*
 
 🆔 *ID Boletim:* ${boletimId}
 🏛️ *ID Banco:* ${result.boletimId}
@@ -1256,8 +1322,24 @@ app.post('/webhook', async (req, res) => {
             await sendWhatsAppMessage(phone, confirmMessage);
             
         } else {
+            // Buscar dados do banco para confirmação
+            const dadosDoBanco = await buscarDadosBoletimPorId(result.boletimId);
+            
             // Se não encontrar coordenador, processar como antes
-            const confirmMessage = `✅ *BOLETIM PROCESSADO COM SUCESSO!*
+            const confirmMessage = dadosDoBanco ?
+                `✅ *BOLETIM PROCESSADO COM SUCESSO!*
+
+📊 *DADOS CONFIRMADOS NO BANCO:*
+• *Projeto:* ${dadosDoBanco.PROJETO || 'N/A'}
+• *Fazenda:* ${dadosDoBanco.FAZENDA || 'N/A'}
+• *Responsável:* ${dadosDoBanco.RESPONSAVEL || 'N/A'}
+• *Supervisor:* ${dadosDoBanco.SUPERVISOR || 'N/A'}
+• *Área Realizada:* ${dadosDoBanco.AREA_REALIZADA ? String(dadosDoBanco.AREA_REALIZADA).replace('.', ',') : 'N/A'} ha
+• *Colaboradores:* ${extractedData.rateio_producao.colaboradores.length}
+
+💾 Dados salvos no banco de dados!
+🤖 Processado pelo Bot Z-API` :
+                `✅ *BOLETIM PROCESSADO COM SUCESSO!*
 
 📊 *Resumo:*
 • Projeto: ${extractedData.dados_boletim.projeto}
