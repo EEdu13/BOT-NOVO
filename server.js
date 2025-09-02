@@ -56,9 +56,10 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
         const url = `${zapiConfig.baseUrl}/${zapiConfig.instanceId}/token/${zapiConfig.token}/send-button-actions`;
         console.log(`🔗 URL Z-API: ${url}`);
         
-        const payload = {
+        // Primeiro botão: APROVAR
+        const payloadAprovar = {
             phone: phone,
-            message: messageData.message,
+            message: messageData.message + `\n\n⬇️ *ESCOLHA UMA AÇÃO:*`,
             title: "📋 BOLETIM PARA APROVAÇÃO",
             footer: "Bot Automático - ALR Florestal",
             buttonActions: [
@@ -66,18 +67,13 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
                     id: messageData.buttons[0].id,
                     type: "REPLY",
                     label: messageData.buttons[0].title
-                },
-                {
-                    id: messageData.buttons[1].id,
-                    type: "REPLY",
-                    label: messageData.buttons[1].title
                 }
             ]
         };
         
-        console.log('📤 Payload com botões:', JSON.stringify(payload, null, 2));
+        console.log('📤 Payload APROVAR:', JSON.stringify(payloadAprovar, null, 2));
         
-        const response = await axios.post(url, payload, {
+        const response = await axios.post(url, payloadAprovar, {
             headers: {
                 'Content-Type': 'application/json',
                 'Client-Token': zapiConfig.clientToken
@@ -85,7 +81,39 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
             timeout: 10000
         });
 
-        console.log('✅ Resposta Z-API (botões):', response.data);
+        console.log('✅ Resposta Z-API (botão APROVAR):', response.data);
+        
+        // Aguardar 2 segundos e enviar segundo botão: CORRIGIR
+        setTimeout(async () => {
+            try {
+                const payloadCorrigir = {
+                    phone: phone,
+                    message: `🔄 *OU SOLICITE CORREÇÃO:*`,
+                    buttonActions: [
+                        {
+                            id: messageData.buttons[1].id,
+                            type: "REPLY",
+                            label: messageData.buttons[1].title
+                        }
+                    ]
+                };
+                
+                console.log('📤 Payload CORRIGIR:', JSON.stringify(payloadCorrigir, null, 2));
+                
+                const response2 = await axios.post(url, payloadCorrigir, {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Client-Token': zapiConfig.clientToken
+                    },
+                    timeout: 10000
+                });
+                
+                console.log('✅ Resposta Z-API (botão CORRIGIR):', response2.data);
+            } catch (error2) {
+                console.error('❌ Erro ao enviar botão CORRIGIR:', error2.message);
+            }
+        }, 2000);
+        
         return response.data;
     } catch (error) {
         console.error('❌ Erro ao enviar mensagem com botões:', error.message);
