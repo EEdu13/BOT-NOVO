@@ -839,8 +839,8 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
             return res.status(200).json({ success: true });
         }
         
-        // Verificar se é aprovação específica por ID do banco (formato: "APROVAR 123")
-        const match = messageText.match(/APROVAR\s+(\d+)/i);
+        // Verificar se é aprovação específica por ID do banco (formato: "APROVAR 123" ou "APROVAR_123")
+        const match = messageText.match(/APROVAR[\s_]+(\d+)/i);
         let boletimParaAprovar = null;
         let indiceBoletim = -1;
         
@@ -962,8 +962,8 @@ async function processarCorrecao(phone, messageText, res, boletimId = null) {
             return res.status(200).json({ success: true });
         }
 
-        // Extrair ID do banco se especificado na mensagem (formato: CORRIGIR 123)
-        const idBancoMatch = messageText.match(/CORRIGIR\s+(\d+)/i);
+        // Extrair ID do banco se especificado na mensagem (formato: CORRIGIR 123 ou CORRIGIR_123)
+        const idBancoMatch = messageText.match(/CORRIGIR[\s_]+(\d+)/i);
         let boletimParaCorrigir;
         let indiceParaRemover;
 
@@ -1050,7 +1050,14 @@ app.post('/webhook', async (req, res) => {
                            req.body.selectedRowId || 
                            req.body.button?.id ||
                            req.body.buttonResponse?.selectedButtonId ||
-                           (messageText && (messageText.startsWith('APROVAR_') || messageText.startsWith('CORRIGIR_'))) ? messageText : null;
+                           req.body.interactiveMessage?.buttonReply?.id ||
+                           req.body.message?.buttonsResponseMessage?.selectedButtonId ||
+                           // Verificar se o texto da mensagem É o ID do botão (quando clica em REPLY)
+                           (messageText && (messageText === 'APROVAR_137' || messageText === 'CORRIGIR_137' || messageText.startsWith('APROVAR_') || messageText.startsWith('CORRIGIR_'))) ? messageText : null;
+        
+        console.log(`🔍 DEBUG WEBHOOK COMPLETO:`, JSON.stringify(req.body, null, 2));
+        console.log(`📝 Texto da mensagem: "${messageText}"`);
+        console.log(`🔘 Botão detectado: "${buttonClick}"`);
         
         // Verificar se é uma resposta/reply (mensagem citada)
         const isReply = req.body.quotedMsg || req.body.quoted || req.body.contextInfo || req.body.message?.extendedTextMessage?.contextInfo;
@@ -1083,20 +1090,27 @@ app.post('/webhook', async (req, res) => {
             return res.status(400).json({ error: 'Mensagem ou telefone não fornecido' });
         }
 
-        // Verificar se é resposta de aprovação/correção (normal ou reply)
+        // Verificar se é resposta de aprovação/correção (normal ou reply) - INCLUINDO COMANDOS DIRETOS
         const isAprovacao = messageText.trim().startsWith('1') || 
                            messageText.toLowerCase().includes('aprovar') ||
+                           messageText.startsWith('APROVAR_') ||
                            (isReply && (messageText.toLowerCase().includes('aprovar') || messageText.trim() === '1'));
                            
         const isCorrecao = messageText.trim().startsWith('2') || 
                           messageText.toLowerCase().includes('corrigir') ||
+                          messageText.startsWith('CORRIGIR_') ||
                           (isReply && (messageText.toLowerCase().includes('corrigir') || messageText.trim() === '2'));
         
+        console.log(`✅ É aprovação? ${isAprovacao}`);
+        console.log(`❌ É correção? ${isCorrecao}`);
+        
         if (isAprovacao) {
+            console.log(`✅ PROCESSANDO COMO APROVAÇÃO`);
             return await processarAprovacao(phone, messageText, res);
         }
         
         if (isCorrecao) {
+            console.log(`❌ PROCESSANDO COMO CORREÇÃO`);
             return await processarCorrecao(phone, messageText, res);
         }
 
