@@ -83,64 +83,91 @@ async function sendWhatsAppMessage(phone, message) {
 async function processMessageWithAI(message) {
     try {
         const prompt = `
-        Você é um assistente especializado em extrair dados de boletins diários florestais.
-        
-        Analise a mensagem abaixo e extraia TODOS os dados no formato JSON exato:
-        
+        Você é um ESPECIALISTA EM ANÁLISE DE BOLETINS FLORESTAIS com IA avançada para extrair dados de qualquer formato.
+
+        REGRAS DE IDENTIFICAÇÃO SUPER INTELIGENTE:
+
+        📅 DATA: Procure por "DATA:", "01/09/2025", "2025-09-01", "HOJE", ou datas em qualquer posição da mensagem
+        🏗️ PROJETO: Números como "820", "830", "PROJETO: 820", "PROJ: 820"
+        👤 SUPERVISOR: Nomes após "SUPERVISOR:", "SUPER:", "SUPERV:", ou primeiro nome em maiúsculas (ex: "OSCAR")
+        👷 LÍDER: Após "LÍDER:", "LIDER:", "NOME_LIDER:", "LEAD:" ou nomes próprios
+        🏢 EMPRESA: "LARSIL", "EMPRESA:", textos com "LTDA", "S.A.", "TERCEIRIZADA"
+        🚜 SERVIÇO: "plantio", "capina", "aplicação", "SERVIÇO:", "ATIVIDADE:"
+        🌱 FAZENDA: Após "FAZENDA:", nomes como "ype", "santa", "fazenda x"
+        📍 TALHÃO: Números após "TALHÃO:", "TALHAO:", formato "008", "T008", "TALH:"
+        📏 ÁREA REALIZADA: Números com vírgula após "REALIZADA:", "AREA REAL:", "executado:"
+        📐 ÁREA TOTAL: Números após "AREA TOTAL:", "TOTAL:", "total da area:"
+        📊 ÁREA RESTANTE: Números após "RESTANTE:", "resta:", "falta:"
+        🟢 STATUS: "ABERTO", "FECHADO", "EM ANDAMENTO", após "STATUS:"
+        🔢 LAUDO: Números grandes como "11.348" (pontos = milhares) → vai para campo TIPO
+        🧬 CLONE: Códigos como "Suza 0217", "AEC 0144", "clone:", "material:"
+        🌱 PLANTADAS: Números grandes após "PLANTADAS:", "mudas:", "plantas:"
+        🗑️ DESCARTE: Números após "DESCARTE:", "perdas:", "refugo:"
+        💊 INSUMOS: "MAP", "prez", "tuit", "adubo" com quantidades
+        👥 COLABORADORES: Listas de números separados por vírgula ou traço
+        🤝 APOIO: Registros com "premio", "operador", "motorista"
+
+        REGRAS DE FORMATAÇÃO BRASILEIRA:
+        - VÍRGULA = decimal (40,42 mantém vírgula)
+        - PONTO em números grandes = milhares (11.348 → vai para TIPO como laudo)
+        - Nomes: apenas primeira letra maiúscula se for nome completo
+        - "HOJE" = data atual (2025-09-02)
+        - Datas brasileiras: DD/MM/YYYY → YYYY-MM-DD
+
+        EXEMPLOS DE IDENTIFICAÇÃO FLEXÍVEL:
+        "DATA: 01/09/2025 PROJETO: 820 SUPERVISOR: OSCAR" → data="2025-09-01", projeto="820", supervisor="OSCAR"
+        "820 - OSCAR - plantio - ype - T008 - 5,42ha - HOJE" → projeto="820", supervisor="OSCAR", area_realizada="5,42"
+        "Projeto 820 Oscar plantio fazenda ype talhão 008 área 5,42" → mesmo resultado
+
+        ATENÇÃO MÁXIMA AOS ERROS ANTERIORES:
+        ❌ SUPERVISOR ≠ lista de colaboradores (OSCAR ≠ "118,15,413")
+        ❌ EMPRESA ≠ nome de líder (LARSIL ≠ "Elton Costa") 
+        ❌ COD deve ficar VAZIO (campo reservado)
+        ❌ LAUDO (números grandes) vai para campo TIPO
+        ✅ Mantenha VÍRGULAS nos decimais (5,42 não vira 5.42)
+
+        JSON DE SAÍDA OBRIGATÓRIO:
         {
             "tipo": "boletim_diario",
             "dados_boletim": {
                 "data": "YYYY-MM-DD",
                 "projeto": "string",
-                "equipe": "string",
-                "supervisor": "string", 
-                "lider": "string",
-                "cod": "string",
-                "empresa": "string",
+                "equipe": "",
+                "supervisor": "string (apenas nomes, nunca números)",
+                "lider": "string (apenas nomes, nunca empresa)", 
+                "cod": "",
+                "empresa": "string (apenas empresas)",
                 "servico": "string",
                 "fazenda": "string",
                 "talhao": "string",
-                "area_realizada": number,
-                "area_total": number,
-                "area_restante": number,
+                "area_realizada": "string com vírgula",
+                "area_total": "number",
+                "area_restante": "number", 
                 "status_talhao": "string",
-                "lote_nf": "string",
-                "tipo": "string",
+                "lote_nf": "",
+                "tipo": "string (LAUDO números grandes aqui)",
                 "clone": "string",
-                "plantadas": number,
-                "descarte": number,
-                "insumos": [
-                    {"lote": "string", "insumo": "string", "quantidade": number}
-                ],
+                "plantadas": "number",
+                "descarte": "number",
+                "insumos": [{"lote": "", "insumo": "string", "quantidade": "number"}],
                 "observacao": "string"
             },
             "rateio_producao": {
-                "colaboradores": ["2508", "2509", "2510", "2308", "2108"],
-                "valores": [2, 0, 0, 0, 0],
-                "divisao_igual": "SIM"
+                "colaboradores": ["array de números como strings"],
+                "valores": "array mesmo tamanho",
+                "divisao_igual": "SIM ou NAO"
             },
             "equipe_apoio": [
-                {"registro": "2689", "premio": "SIM", "classe": "VIVEIRO", "valor": 30.00},
-                {"registro": "2608", "premio": "NAO", "classe": "", "valor": 0},
-                {"registro": "2609", "premio": "NAO", "classe": "", "valor": 0}
-            ],
-            "estrutura_apoio": [
-                {"prefixo": "TP001", "registro": "0528", "premio": "SIM", "classe": "MOTORISTA", "valor": 30.00},
-                {"prefixo": "TP009", "registro": "0529", "premio": "NAO", "classe": "", "valor": 0}
+                {"registro": "string", "premio": "SIM", "classe": "OPERADOR", "valor": 30.00}
             ]
         }
-        
-        REGRAS IMPORTANTES:
-        - Se "HOJE" na data, use a data atual
-        - Se DIVISÃO DO PREMIO IGUAL = SIM, divida area_realizada igualmente
-        - Se DIVISÃO DO PREMIO IGUAL = NAO, use valores específicos após os traços
-        - Se há "PREMIO" no texto, premio = "SIM" e valor = 30.00
-        - Se vazio após traço, valor = 0
-        
+
+        SEJA FLEXÍVEL MAS PRECISO! A mensagem pode ter campos em qualquer ordem.
+
         Mensagem para analisar:
         ${message}
-        
-        Responda APENAS com o JSON, sem explicações.
+
+        Responda APENAS com o JSON válido, sem explicações.
         `;
 
         const completion = await openai.chat.completions.create({
@@ -439,6 +466,155 @@ async function insertDataToDatabase(extractedData) {
         if (pool) {
             await pool.close();
         }
+    }
+}
+
+// Função para buscar supervisor completo no organograma
+async function buscarSupervisorCompleto(nomeParcial, projeto) {
+    try {
+        console.log(`🔍 Buscando supervisor: "${nomeParcial}" no projeto: ${projeto}`);
+        
+        const pool = await sql.connect(config);
+        
+        // Primeira tentativa: buscar pelo projeto específico
+        const resultadoProjeto = await pool.request()
+            .input('projeto', sql.VarChar, projeto)
+            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
+            .query(`
+                SELECT DISTINCT SUPERVISOR 
+                FROM ORGANOGRAMA 
+                WHERE PROJETO = @projeto 
+                AND SUPERVISOR LIKE @nome
+                AND SUPERVISOR IS NOT NULL 
+                AND SUPERVISOR != ''
+            `);
+        
+        if (resultadoProjeto.recordset.length > 0) {
+            const nomeCompleto = resultadoProjeto.recordset[0].SUPERVISOR;
+            console.log(`✅ Supervisor encontrado no projeto ${projeto}: ${nomeCompleto}`);
+            return nomeCompleto;
+        }
+        
+        // Segunda tentativa: buscar em qualquer projeto
+        const resultadoGeral = await pool.request()
+            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
+            .query(`
+                SELECT DISTINCT SUPERVISOR, PROJETO
+                FROM ORGANOGRAMA 
+                WHERE SUPERVISOR LIKE @nome
+                AND SUPERVISOR IS NOT NULL 
+                AND SUPERVISOR != ''
+                ORDER BY PROJETO
+            `);
+        
+        if (resultadoGeral.recordset.length > 0) {
+            const nomeCompleto = resultadoGeral.recordset[0].SUPERVISOR;
+            const projetoEncontrado = resultadoGeral.recordset[0].PROJETO;
+            console.log(`✅ Supervisor encontrado em outro projeto ${projetoEncontrado}: ${nomeCompleto}`);
+            return nomeCompleto;
+        }
+        
+        console.log(`⚠️ Supervisor "${nomeParcial}" não encontrado no organograma`);
+        return nomeParcial; // Retorna o nome original se não encontrar
+        
+    } catch (error) {
+        console.error('Erro ao buscar supervisor no organograma:', error.message);
+        return nomeParcial; // Retorna o nome original em caso de erro
+    }
+}
+
+// Função para buscar líder completo no organograma
+async function buscarLiderCompleto(nomeParcial, projeto) {
+    try {
+        console.log(`🔍 Buscando líder: "${nomeParcial}" no projeto: ${projeto}`);
+        
+        const pool = await sql.connect(config);
+        
+        // Primeira tentativa: buscar pelo projeto específico
+        const resultadoProjeto = await pool.request()
+            .input('projeto', sql.VarChar, projeto)
+            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
+            .query(`
+                SELECT DISTINCT LIDER 
+                FROM ORGANOGRAMA 
+                WHERE PROJETO = @projeto 
+                AND LIDER LIKE @nome
+                AND LIDER IS NOT NULL 
+                AND LIDER != ''
+            `);
+        
+        if (resultadoProjeto.recordset.length > 0) {
+            const nomeCompleto = resultadoProjeto.recordset[0].LIDER;
+            console.log(`✅ Líder encontrado no projeto ${projeto}: ${nomeCompleto}`);
+            return nomeCompleto;
+        }
+        
+        // Segunda tentativa: buscar em qualquer projeto
+        const resultadoGeral = await pool.request()
+            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
+            .query(`
+                SELECT DISTINCT LIDER, PROJETO
+                FROM ORGANOGRAMA 
+                WHERE LIDER LIKE @nome
+                AND LIDER IS NOT NULL 
+                AND LIDER != ''
+                ORDER BY PROJETO
+            `);
+        
+        if (resultadoGeral.recordset.length > 0) {
+            const nomeCompleto = resultadoGeral.recordset[0].LIDER;
+            const projetoEncontrado = resultadoGeral.recordset[0].PROJETO;
+            console.log(`✅ Líder encontrado em outro projeto ${projetoEncontrado}: ${nomeCompleto}`);
+            return nomeCompleto;
+        }
+        
+        console.log(`⚠️ Líder "${nomeParcial}" não encontrado no organograma`);
+        return nomeParcial; // Retorna o nome original se não encontrar
+        
+    } catch (error) {
+        console.error('Erro ao buscar líder no organograma:', error.message);
+        return nomeParcial; // Retorna o nome original em caso de erro
+    }
+}
+
+// Função para completar nomes automaticamente usando organograma
+async function completarNomesAutomaticamente(dados) {
+    try {
+        console.log('🔍 Iniciando busca inteligente no organograma...');
+        
+        const projeto = dados.dados_boletim.projeto;
+        
+        // Completar nome do supervisor se for apenas primeiro nome
+        if (dados.dados_boletim.supervisor && dados.dados_boletim.supervisor.trim()) {
+            const supervisorAtual = dados.dados_boletim.supervisor.trim();
+            
+            // Se for apenas um nome (não contém espaço), buscar nome completo
+            if (!supervisorAtual.includes(' ') && supervisorAtual.length > 2) {
+                console.log(`🔍 Buscando nome completo para supervisor: ${supervisorAtual}`);
+                const nomeCompleto = await buscarSupervisorCompleto(supervisorAtual, projeto);
+                dados.dados_boletim.supervisor = nomeCompleto;
+                console.log(`✅ Supervisor atualizado: ${supervisorAtual} → ${nomeCompleto}`);
+            }
+        }
+        
+        // Completar nome do líder se for apenas primeiro nome
+        if (dados.dados_boletim.lider && dados.dados_boletim.lider.trim()) {
+            const liderAtual = dados.dados_boletim.lider.trim();
+            
+            // Se for apenas um nome (não contém espaço), buscar nome completo
+            if (!liderAtual.includes(' ') && liderAtual.length > 2) {
+                console.log(`🔍 Buscando nome completo para líder: ${liderAtual}`);
+                const nomeCompleto = await buscarLiderCompleto(liderAtual, projeto);
+                dados.dados_boletim.lider = nomeCompleto;
+                console.log(`✅ Líder atualizado: ${liderAtual} → ${nomeCompleto}`);
+            }
+        }
+        
+        return dados;
+        
+    } catch (error) {
+        console.error('Erro ao completar nomes automaticamente:', error.message);
+        return dados;
     }
 }
 
@@ -846,7 +1022,10 @@ app.post('/webhook', async (req, res) => {
         }
 
         // Processar mensagem com OpenAI
-        const extractedData = await processMessageWithAI(messageText);
+        let extractedData = await processMessageWithAI(messageText);
+        
+        // Completar nomes automaticamente usando organograma (OSCAR → OSCAR ANTONIO TEIXEIRA PRATES)
+        extractedData = await completarNomesAutomaticamente(extractedData);
         
         // Inserir dados no banco
         const result = await insertDataToDatabase(extractedData);

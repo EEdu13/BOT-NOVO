@@ -4,7 +4,7 @@
 
 ### 1. Conectar ao Railway
 1. Acesse [railway.app](https://railway.app)
-2. Faça login com GitHub
+2. Faça login com GitHubd
 3. Clique em "New Project" 
 4. Selecione "Deploy from GitHub repo"
 5. Escolha o repositório `BOT-NOVO`
