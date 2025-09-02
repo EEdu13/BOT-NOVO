@@ -50,7 +50,42 @@ const zapiConfig = {
     baseUrl: process.env.ZAPI_BASE_URL
 };
 
-// Função para enviar mensagem via Z-API
+// Função para enviar mensagem com botões via Z-API
+async function sendWhatsAppMessageWithButtons(phone, messageData) {
+    try {
+        console.log(`🔗 URL Z-API: ${apiUrl}/send-button-list`);
+        
+        const payload = {
+            phone: phone,
+            message: messageData.message,
+            buttonList: {
+                buttons: messageData.buttons.map(button => ({
+                    id: button.id,
+                    label: button.title
+                }))
+            }
+        };
+        
+        console.log('📤 Payload com botões:', JSON.stringify(payload, null, 2));
+        
+        const response = await fetch(`${apiUrl}/send-button-list`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Client-Token': zapiToken
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        console.log('✅ Resposta Z-API (botões):', result);
+        return result;
+    } catch (error) {
+        console.error('❌ Erro ao enviar mensagem com botões:', error);
+        // Fallback: enviar mensagem simples
+        return await sendWhatsAppMessage(phone, messageData.message);
+    }
+}
 async function sendWhatsAppMessage(phone, message) {
     try {
         const url = `${zapiConfig.baseUrl}/${zapiConfig.instanceId}/token/${zapiConfig.token}/send-text`;
@@ -594,113 +629,7 @@ async function insertDataToDatabase(extractedData) {
     }
 }
 
-// Função para buscar supervisor completo no organograma
-async function buscarSupervisorCompleto(nomeParcial, projeto) {
-    try {
-        console.log(`🔍 Buscando supervisor: "${nomeParcial}" no projeto: ${projeto}`);
-        
-        const pool = await sql.connect(config);
-        
-        // Primeira tentativa: buscar pelo projeto específico
-        const resultadoProjeto = await pool.request()
-            .input('projeto', sql.VarChar, projeto)
-            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
-            .query(`
-                SELECT DISTINCT SUPERVISOR 
-                FROM ORGANOGRAMA 
-                WHERE PROJETO = @projeto 
-                AND SUPERVISOR LIKE @nome
-                AND SUPERVISOR IS NOT NULL 
-                AND SUPERVISOR != ''
-            `);
-        
-        if (resultadoProjeto.recordset.length > 0) {
-            const nomeCompleto = resultadoProjeto.recordset[0].SUPERVISOR;
-            console.log(`✅ Supervisor encontrado no projeto ${projeto}: ${nomeCompleto}`);
-            return nomeCompleto;
-        }
-        
-        // Segunda tentativa: buscar em qualquer projeto
-        const resultadoGeral = await pool.request()
-            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
-            .query(`
-                SELECT DISTINCT SUPERVISOR, PROJETO
-                FROM ORGANOGRAMA 
-                WHERE SUPERVISOR LIKE @nome
-                AND SUPERVISOR IS NOT NULL 
-                AND SUPERVISOR != ''
-                ORDER BY PROJETO
-            `);
-        
-        if (resultadoGeral.recordset.length > 0) {
-            const nomeCompleto = resultadoGeral.recordset[0].SUPERVISOR;
-            const projetoEncontrado = resultadoGeral.recordset[0].PROJETO;
-            console.log(`✅ Supervisor encontrado em outro projeto ${projetoEncontrado}: ${nomeCompleto}`);
-            return nomeCompleto;
-        }
-        
-        console.log(`⚠️ Supervisor "${nomeParcial}" não encontrado no organograma`);
-        return nomeParcial; // Retorna o nome original se não encontrar
-        
-    } catch (error) {
-        console.error('Erro ao buscar supervisor no organograma:', error.message);
-        return nomeParcial; // Retorna o nome original em caso de erro
-    }
-}
-
-// Função para buscar líder completo no organograma
-async function buscarLiderCompleto(nomeParcial, projeto) {
-    try {
-        console.log(`🔍 Buscando líder: "${nomeParcial}" no projeto: ${projeto}`);
-        
-        const pool = await sql.connect(config);
-        
-        // Primeira tentativa: buscar pelo projeto específico
-        const resultadoProjeto = await pool.request()
-            .input('projeto', sql.VarChar, projeto)
-            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
-            .query(`
-                SELECT DISTINCT LIDER 
-                FROM ORGANOGRAMA 
-                WHERE PROJETO = @projeto 
-                AND LIDER LIKE @nome
-                AND LIDER IS NOT NULL 
-                AND LIDER != ''
-            `);
-        
-        if (resultadoProjeto.recordset.length > 0) {
-            const nomeCompleto = resultadoProjeto.recordset[0].LIDER;
-            console.log(`✅ Líder encontrado no projeto ${projeto}: ${nomeCompleto}`);
-            return nomeCompleto;
-        }
-        
-        // Segunda tentativa: buscar em qualquer projeto
-        const resultadoGeral = await pool.request()
-            .input('nome', sql.VarChar, `%${nomeParcial.toUpperCase()}%`)
-            .query(`
-                SELECT DISTINCT LIDER, PROJETO
-                FROM ORGANOGRAMA 
-                WHERE LIDER LIKE @nome
-                AND LIDER IS NOT NULL 
-                AND LIDER != ''
-                ORDER BY PROJETO
-            `);
-        
-        if (resultadoGeral.recordset.length > 0) {
-            const nomeCompleto = resultadoGeral.recordset[0].LIDER;
-            const projetoEncontrado = resultadoGeral.recordset[0].PROJETO;
-            console.log(`✅ Líder encontrado em outro projeto ${projetoEncontrado}: ${nomeCompleto}`);
-            return nomeCompleto;
-        }
-        
-        console.log(`⚠️ Líder "${nomeParcial}" não encontrado no organograma`);
-        return nomeParcial; // Retorna o nome original se não encontrar
-        
-    } catch (error) {
-        console.error('Erro ao buscar líder no organograma:', error.message);
-        return nomeParcial; // Retorna o nome original em caso de erro
-    }
-}
+// Funções de busca inteligente removidas - não funcionavam conforme esperado
 
 // Função para completar nomes automaticamente usando organograma
 async function completarNomesAutomaticamente(dados) {
@@ -709,39 +638,7 @@ async function completarNomesAutomaticamente(dados) {
         
         const projeto = dados.dados_boletim.projeto;
         
-        // Completar nome do supervisor se for apenas primeiro nome
-        if (dados.dados_boletim.supervisor && dados.dados_boletim.supervisor.trim()) {
-            const supervisorAtual = dados.dados_boletim.supervisor.trim();
-            
-            // Sempre tentar buscar nome completo no organograma
-            console.log(`🔍 Buscando nome completo para supervisor: ${supervisorAtual}`);
-            const nomeCompleto = await buscarSupervisorCompleto(supervisorAtual, projeto);
-            
-            // Se encontrou um nome diferente/mais completo, usar ele
-            if (nomeCompleto && nomeCompleto !== supervisorAtual) {
-                dados.dados_boletim.supervisor = nomeCompleto;
-                console.log(`✅ Supervisor atualizado: ${supervisorAtual} → ${nomeCompleto}`);
-            } else {
-                console.log(`ℹ️ Supervisor mantido: ${supervisorAtual}`);
-            }
-        }
-        
-        // Completar nome do líder se for apenas primeiro nome
-        if (dados.dados_boletim.lider && dados.dados_boletim.lider.trim()) {
-            const liderAtual = dados.dados_boletim.lider.trim();
-            
-            // Sempre tentar buscar nome completo no organograma
-            console.log(`🔍 Buscando nome completo para líder: ${liderAtual}`);
-            const nomeCompleto = await buscarLiderCompleto(liderAtual, projeto);
-            
-            // Se encontrou um nome diferente/mais completo, usar ele
-            if (nomeCompleto && nomeCompleto !== liderAtual) {
-                dados.dados_boletim.lider = nomeCompleto;
-                console.log(`✅ Líder atualizado: ${liderAtual} → ${nomeCompleto}`);
-            } else {
-                console.log(`ℹ️ Líder mantido: ${liderAtual}`);
-            }
-        }
+        // Busca inteligente removida - não estava funcionando conforme esperado
         
         return dados;
         
@@ -854,11 +751,20 @@ function formatarMensagemAprovacao(extractedData, telefoneOriginal, boletimId, b
         mensagem += `\n📝 *Obs:* ${dados.observacoes}\n`;
     }
     
-    mensagem += `\n*Responda:*\n`;
-    mensagem += `*APROVAR ${boletimDbId}*\n`;
-    mensagem += `*CORRIGIR ${boletimDbId}* (+ observação)`;
-    
-    return mensagem;
+    // Retornar objeto com mensagem e botões para Z-API
+    return {
+        message: mensagem,
+        buttons: [
+            {
+                id: `APROVAR_${boletimDbId}`,
+                title: "✅ APROVAR"
+            },
+            {
+                id: `CORRIGIR_${boletimDbId}`,
+                title: "❌ CORRIGIR"
+            }
+        ]
+    };
 }
 
 // Função para formatar mensagem para usuários de QUALIDADE (somente visualização)
@@ -1124,6 +1030,10 @@ app.post('/webhook', async (req, res) => {
                           req.body.content;
         const fromMe = req.body.fromMe;
         
+        // Detectar clique em botão - Z-API retorna o ID do botão como texto da mensagem
+        const buttonClick = req.body.selectedButtonId || req.body.selectedRowId || req.body.button?.id || 
+                           (messageText && (messageText.startsWith('APROVAR_') || messageText.startsWith('CORRIGIR_'))) ? messageText : null;
+        
         // Verificar se é uma resposta/reply (mensagem citada)
         const isReply = req.body.quotedMsg || req.body.quoted || req.body.contextInfo || req.body.message?.extendedTextMessage?.contextInfo;
         const quotedMessage = req.body.quotedMsg?.body || req.body.quoted?.body || req.body.contextInfo?.quotedMessage?.body || req.body.message?.extendedTextMessage?.contextInfo?.quotedMessage?.conversation;
@@ -1131,6 +1041,21 @@ app.post('/webhook', async (req, res) => {
         // Ignorar mensagens enviadas por nós mesmos
         if (fromMe) {
             return res.status(200).json({ success: true, message: 'Mensagem própria ignorada' });
+        }
+        
+        // Processar clique em botão
+        if (buttonClick) {
+            console.log(`🔘 Botão clicado: ${buttonClick} por ${phone}`);
+            
+            if (buttonClick.startsWith('APROVAR_')) {
+                const boletimDbId = buttonClick.replace('APROVAR_', '');
+                return await processarAprovacao(phone, `APROVAR ${boletimDbId}`, res);
+            }
+            
+            if (buttonClick.startsWith('CORRIGIR_')) {
+                const boletimDbId = buttonClick.replace('CORRIGIR_', '');
+                return await processarCorrecao(phone, `CORRIGIR ${boletimDbId}`, res);
+            }
         }
         
         if (!messageText || !phone) {
@@ -1199,7 +1124,7 @@ app.post('/webhook', async (req, res) => {
             // Formatar e enviar mensagem para coordenador
             const mensagemAprovacao = formatarMensagemAprovacao(extractedData, phone, boletimId, result.boletimId);
             
-            await sendWhatsAppMessage(telefoneCoordenador, mensagemAprovacao);
+            await sendWhatsAppMessageWithButtons(telefoneCoordenador, mensagemAprovacao);
             
             // Enviar para usuários de QUALIDADE (somente visualização)
             if (usuariosQualidade.length > 0) {
