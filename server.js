@@ -1111,7 +1111,8 @@ app.post('/webhook', async (req, res) => {
         const fromMe = req.body.fromMe;
         
         // Detectar clique em botão - Z-API retorna o ID do botão quando clicado
-        const buttonClick = req.body.selectedButtonId || 
+        const buttonClick = req.body.buttonReply?.buttonId ||  // Campo correto do Z-API
+                           req.body.selectedButtonId || 
                            req.body.selectedRowId || 
                            req.body.button?.id ||
                            req.body.buttonResponse?.selectedButtonId ||
