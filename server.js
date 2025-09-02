@@ -383,7 +383,7 @@ async function insertDataToDatabase(extractedData) {
             console.error('🔍 Mensagem:', queryError.message);
             console.error('🔍 Código:', queryError.code);
             console.error('🔍 Número:', queryError.number);
-            console.error('� Estado:', queryError.state);
+            console.error('❌ Estado:', queryError.state);
             console.error('🔍 Linha:', queryError.lineNumber);
             console.error('🔍 Procedimento:', queryError.procName);
             
@@ -782,8 +782,8 @@ async function formatarMensagemAprovacao(extractedData, telefoneOriginal, boleti
     mensagem += `📅 *Data:* ${formatarDataBrasileira(dados.data)}\n`;
     mensagem += `🏗️ *Projeto:* ${dados.projeto}\n`;
     mensagem += `👨‍💼 *Supervisor:* ${dados.supervisor}\n`;
-    mensagem += `� *Líder:* ${dados.lider}\n`;
-    mensagem += `�🚜 *Serviço:* ${dados.servico}\n`;
+    mensagem += `👨‍🔧 *Líder:* ${dados.lider}\n`;
+    mensagem += `🚜 *Serviço:* ${dados.servico}\n`;
     mensagem += `🌱 *Fazenda:* ${dados.fazenda}\n`;
     mensagem += `📏 *Área Realizada:* ${String(dados.area_realizada).replace('.', ',')}\n\n`;
     
@@ -831,7 +831,7 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
         return String(value).toUpperCase();
     };
     
-    let mensagem = `� *APONTAMENTO RESUMIDO DO DIA*\n\n`;
+    let mensagem = `📋 *APONTAMENTO RESUMIDO DO DIA*\n\n`;
     mensagem += `🆔 *ID BOLETIM:* ${boletimId}\n`;
     mensagem += `🏛️ *ID BANCO:* ${boletimDbId}\n`;
     mensagem += `📱 *ENVIADO POR:* ${telefoneOriginal}\n`;
