@@ -56,10 +56,9 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
         const url = `${zapiConfig.baseUrl}/${zapiConfig.instanceId}/token/${zapiConfig.token}/send-button-actions`;
         console.log(`🔗 URL Z-API: ${url}`);
         
-        // Primeiro botão: APROVAR
-        const payloadAprovar = {
+        const payload = {
             phone: phone,
-            message: messageData.message + `\n\n⬇️ *ESCOLHA UMA AÇÃO:*`,
+            message: messageData.message,
             title: "📋 BOLETIM PARA APROVAÇÃO",
             footer: "Bot Automático - ALR Florestal",
             buttonActions: [
@@ -67,13 +66,18 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
                     id: messageData.buttons[0].id,
                     type: "REPLY",
                     label: messageData.buttons[0].title
+                },
+                {
+                    id: messageData.buttons[1].id,
+                    type: "REPLY",
+                    label: messageData.buttons[1].title
                 }
             ]
         };
         
-        console.log('📤 Payload APROVAR:', JSON.stringify(payloadAprovar, null, 2));
+        console.log('📤 Payload com botões:', JSON.stringify(payload, null, 2));
         
-        const response = await axios.post(url, payloadAprovar, {
+        const response = await axios.post(url, payload, {
             headers: {
                 'Content-Type': 'application/json',
                 'Client-Token': zapiConfig.clientToken
@@ -81,39 +85,7 @@ async function sendWhatsAppMessageWithButtons(phone, messageData) {
             timeout: 10000
         });
 
-        console.log('✅ Resposta Z-API (botão APROVAR):', response.data);
-        
-        // Aguardar 2 segundos e enviar segundo botão: CORRIGIR
-        setTimeout(async () => {
-            try {
-                const payloadCorrigir = {
-                    phone: phone,
-                    message: `🔄 *OU SOLICITE CORREÇÃO:*`,
-                    buttonActions: [
-                        {
-                            id: messageData.buttons[1].id,
-                            type: "REPLY",
-                            label: messageData.buttons[1].title
-                        }
-                    ]
-                };
-                
-                console.log('📤 Payload CORRIGIR:', JSON.stringify(payloadCorrigir, null, 2));
-                
-                const response2 = await axios.post(url, payloadCorrigir, {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Client-Token': zapiConfig.clientToken
-                    },
-                    timeout: 10000
-                });
-                
-                console.log('✅ Resposta Z-API (botão CORRIGIR):', response2.data);
-            } catch (error2) {
-                console.error('❌ Erro ao enviar botão CORRIGIR:', error2.message);
-            }
-        }, 2000);
-        
+        console.log('✅ Resposta Z-API (botões):', response.data);
         return response.data;
     } catch (error) {
         console.error('❌ Erro ao enviar mensagem com botões:', error.message);
@@ -849,12 +821,20 @@ function formatarMensagemQualidade(extractedData, telefoneOriginal, boletimId, b
 // Função para processar aprovação
 async function processarAprovacao(phone, messageText, res, boletimId = null) {
     try {
+        console.log(`🔍 PROCESSANDO APROVAÇÃO:`);
+        console.log(`📞 Telefone: ${phone}`);
+        console.log(`📝 Mensagem: ${messageText}`);
+        console.log(`🆔 Boletim ID: ${boletimId}`);
+        
         // Normalizar telefone (usar apenas números)
         const telefoneNormalizado = phone.replace(/[^\d]/g, '');
+        console.log(`📞 Telefone normalizado: ${telefoneNormalizado}`);
         
         const boletinsArray = boletisPendentes.get(telefoneNormalizado);
+        console.log(`📋 Boletins pendentes encontrados:`, boletinsArray ? boletinsArray.length : 0);
         
         if (!boletinsArray || boletinsArray.length === 0) {
+            console.log(`❌ Nenhum boletim pendente para ${telefoneNormalizado}`);
             await sendWhatsAppMessage(phone, "❌ Nenhum boletim pendente encontrado para aprovação.");
             return res.status(200).json({ success: true });
         }
@@ -1084,14 +1064,17 @@ app.post('/webhook', async (req, res) => {
         // Processar clique em botão
         if (buttonClick) {
             console.log(`🔘 Botão clicado: ${buttonClick} por ${phone}`);
+            console.log(`📝 Payload completo do webhook:`, JSON.stringify(req.body, null, 2));
             
             if (buttonClick.startsWith('APROVAR_')) {
                 const boletimDbId = buttonClick.replace('APROVAR_', '');
+                console.log(`✅ Processando aprovação para boletim ID: ${boletimDbId}`);
                 return await processarAprovacao(phone, `APROVAR ${boletimDbId}`, res);
             }
             
             if (buttonClick.startsWith('CORRIGIR_')) {
                 const boletimDbId = buttonClick.replace('CORRIGIR_', '');
+                console.log(`🔄 Processando correção para boletim ID: ${boletimDbId}`);
                 return await processarCorrecao(phone, `CORRIGIR ${boletimDbId}`, res);
             }
         }
