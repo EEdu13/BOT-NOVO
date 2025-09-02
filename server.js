@@ -1172,16 +1172,19 @@ app.post('/webhook', async (req, res) => {
 
         // Detectar aprovação com múltiplas variações (incluindo erros de digitação)
         const textoLimpo = messageText.trim().toLowerCase();
+        
+        // Palavras específicas que indicam aprovação
         const palavrasAprovacao = [
             'aprovar', 'aprova', 'aprovo', 'aprov', 'aprovar ', 'aprova ', 
-            'approve', 'aprove', 'aprovr', 'apruvar', 'aprovar',
-            'ok', 'sim', 'certo', 'correto', '1'
+            'approve', 'aprove', 'aprovr', 'apruvar',
+            'ok', 'sim', 'certo', 'correto'
         ];
         
+        // Palavras específicas que indicam correção
         const palavrasCorrecao = [
             'corrigir', 'corrigi', 'corrigir ', 'corrigi ', 'corrige', 
-            'corrigir', 'corige', 'coregir', 'coregi', 'correção',
-            'correcao', 'erro', 'errado', 'não', 'nao', '2'
+            'corige', 'coregir', 'coregi', 'correção', 'correcao',
+            'errado', 'incorreto', 'não', 'nao'
         ];
         
         // Função para extrair ID do texto (APROVAR 147 ou CORRIGIR 147)
@@ -1190,13 +1193,16 @@ app.post('/webhook', async (req, res) => {
             return matches ? matches[0] : null;
         };
         
-        const isAprovacao = palavrasAprovacao.some(palavra => textoLimpo.includes(palavra)) ||
-                           textoLimpo.startsWith('1') ||
-                           (isReply && palavrasAprovacao.some(palavra => textoLimpo.includes(palavra)));
+        // Detecção mais específica - verificar se começa com a palavra
+        const isAprovacao = (textoLimpo.startsWith('1') || 
+                           palavrasAprovacao.some(palavra => textoLimpo.startsWith(palavra)) ||
+                           (isReply && palavrasAprovacao.some(palavra => textoLimpo.includes(palavra)))) &&
+                           !palavrasCorrecao.some(palavra => textoLimpo.startsWith(palavra));
                            
-        const isCorrecao = palavrasCorrecao.some(palavra => textoLimpo.includes(palavra)) ||
-                          textoLimpo.startsWith('2') ||
-                          (isReply && palavrasCorrecao.some(palavra => textoLimpo.includes(palavra)));
+        const isCorrecao = (textoLimpo.startsWith('2') || 
+                          palavrasCorrecao.some(palavra => textoLimpo.startsWith(palavra)) ||
+                          (isReply && palavrasCorrecao.some(palavra => textoLimpo.includes(palavra)))) &&
+                          !palavrasAprovacao.some(palavra => textoLimpo.startsWith(palavra));
         
         console.log(`✅ É aprovação? ${isAprovacao}`);
         console.log(`❌ É correção? ${isCorrecao}`);
