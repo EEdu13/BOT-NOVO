@@ -701,6 +701,8 @@ async function formatarMensagemAprovacao(extractedData, telefoneOriginal, boleti
     // Buscar dados atualizados do banco
     const dadosDoBanco = await buscarDadosBoletimPorId(boletimDbId);
     
+    let mensagem; // Declarar mensagem fora dos blocos
+    
     if (dadosDoBanco) {
         // Usar dados do banco (formatação padrão)
         const dataFormatada = dadosDoBanco.DATA_BOLETIM ? 
@@ -710,7 +712,7 @@ async function formatarMensagemAprovacao(extractedData, telefoneOriginal, boleti
         const areaFormatada = dadosDoBanco.AREA_REALIZADA ? 
             String(dadosDoBanco.AREA_REALIZADA).replace('.', ',') : 'N/A';
         
-        let mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
+        mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
         mensagem += `🆔 *ID Boletim:* ${boletimId}\n`;
         mensagem += `🏛️ *ID Banco:* ${boletimDbId}\n`;
         mensagem += `📱 *Enviado por:* ${telefoneOriginal}\n`;
@@ -775,7 +777,7 @@ async function formatarMensagemAprovacao(extractedData, telefoneOriginal, boleti
         return data; // Retorna como está se não conseguir converter
     };
     
-    let mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
+    mensagem = `🔍 *APROVAÇÃO DE BOLETIM*\n\n`;
     mensagem += `🆔 *ID Boletim:* ${boletimId}\n`;
     mensagem += `🏛️ *ID Banco:* ${boletimDbId}\n`;
     mensagem += `📱 *Enviado por:* ${telefoneOriginal}\n`;
