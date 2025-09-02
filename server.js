@@ -122,7 +122,7 @@ async function sendWhatsAppMessage(phone, message) {
 }
 
 // Função para processar mensagem com OpenAI
-async function processMessageWithAI(message) {
+async function processMessageWithAI(messageText) {
     try {
         const prompt = `
         Você é um ESPECIALISTA EM ANÁLISE DE BOLETINS FLORESTAIS com IA avançada para extrair dados de qualquer formato.
@@ -227,7 +227,7 @@ async function processMessageWithAI(message) {
         SEJA FLEXÍVEL MAS PRECISO! A mensagem pode ter campos em qualquer ordem.
 
         Mensagem para analisar:
-        ${message}
+        ${messageText}
 
         Responda APENAS com o JSON válido, sem explicações.
         `;
