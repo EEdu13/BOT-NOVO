@@ -882,6 +882,9 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         // Atualizar banco de dados - marcar como aprovado
         await atualizarStatusBoletim(boletimParaAprovar.boletimDbId, 'APROVADO', phone);
         
+        // Buscar dados atualizados do banco para mensagem de aprovação
+        const dadosDoBanco = await buscarDadosBoletimPorId(boletimParaAprovar.boletimDbId);
+        
         // Remover o boletim específico da lista
         boletinsArray.splice(indiceBoletim, 1);
         
@@ -893,18 +896,15 @@ async function processarAprovacao(phone, messageText, res, boletimId = null) {
         console.log(`✅ Boletim ${boletimParaAprovar.id} aprovado e removido da lista`);
         console.log(`📊 Boletins restantes para ${telefoneNormalizado}: ${boletinsArray.length}`);
         
-        // Enviar aprovação para o funcionário
-        const mensagemAprovacao = `✅ *BOLETIM APROVADO!*
+        // Enviar aprovação para o funcionário usando dados do banco
+        const mensagemAprovacao = dadosDoBanco ? 
+            formatarMensagemAprovacaoDoBanco(dadosDoBanco, boletimParaAprovar.boletimDbId) :
+            `✅ *BOLETIM APROVADO!*
 
 🆔 *ID Boletim:* ${boletimParaAprovar.id}
 🏛️ *ID Banco:* ${boletimParaAprovar.boletimDbId}
 👨‍💼 Aprovado por: Coordenador
 📅 Data: ${new Date().toLocaleString('pt-BR')}
-
-📊 *Resumo do Boletim:*
-• Projeto: ${boletimParaAprovar.extractedData.dados_boletim.projeto}
-• Fazenda: ${boletimParaAprovar.extractedData.dados_boletim.fazenda}
-• Área Realizada: ${String(boletimParaAprovar.extractedData.dados_boletim.area_realizada).replace('.', ',')}
 
 💾 Dados confirmados no sistema!`;
 
@@ -941,6 +941,71 @@ async function atualizarStatusBoletim(boletimId, status, aprovadoPor) {
         console.error('❌ Erro ao atualizar status do boletim:', error.message);
         throw error;
     }
+}
+
+// Função para buscar dados do boletim por ID no banco
+async function buscarDadosBoletimPorId(boletimId) {
+    try {
+        const pool = sql.pool || await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('id', sql.BigInt, boletimId)
+            .query(`
+                SELECT 
+                    ID,
+                    DATA_BOLETIM,
+                    PROJETO,
+                    FAZENDA,
+                    RESPONSAVEL,
+                    AREA_REALIZADA,
+                    TURNO,
+                    FUNCIONARIO,
+                    LIDER,
+                    SUPERVISOR,
+                    APROVADO_POR
+                FROM BOLETIM_DIARIO_COPY 
+                WHERE ID = @id
+            `);
+        
+        if (result.recordset.length > 0) {
+            console.log(`✅ Dados do boletim ${boletimId} encontrados no banco`);
+            return result.recordset[0];
+        } else {
+            console.log(`❌ Boletim ${boletimId} não encontrado no banco`);
+            return null;
+        }
+    } catch (error) {
+        console.error('❌ Erro ao buscar dados do boletim:', error.message);
+        return null;
+    }
+}
+
+// Função para formatar mensagem de aprovação usando dados do banco
+function formatarMensagemAprovacaoDoBanco(dadosBanco, boletimId) {
+    const dataFormatada = dadosBanco.DATA_BOLETIM ? 
+        new Date(dadosBanco.DATA_BOLETIM).toLocaleDateString('pt-BR') : 
+        new Date().toLocaleDateString('pt-BR');
+    
+    const areaFormatada = dadosBanco.AREA_REALIZADA ? 
+        String(dadosBanco.AREA_REALIZADA).replace('.', ',') : 'N/A';
+    
+    return `✅ *BOLETIM APROVADO!*
+
+🆔 *ID Banco:* ${boletimId}
+👨‍💼 *Aprovado por:* ${dadosBanco.APROVADO_POR || 'Coordenador'}
+📅 *Data Aprovação:* ${new Date().toLocaleString('pt-BR')}
+
+📊 *DADOS CONFIRMADOS NO SISTEMA:*
+• *Projeto:* ${dadosBanco.PROJETO || 'N/A'}
+• *Fazenda:* ${dadosBanco.FAZENDA || 'N/A'}
+• *Responsável:* ${dadosBanco.RESPONSAVEL || 'N/A'}
+• *Funcionário:* ${dadosBanco.FUNCIONARIO || 'N/A'}
+• *Líder:* ${dadosBanco.LIDER || 'N/A'}
+• *Supervisor:* ${dadosBanco.SUPERVISOR || 'N/A'}
+• *Turno:* ${dadosBanco.TURNO || 'N/A'}
+• *Data Boletim:* ${dataFormatada}
+• *Área Realizada:* ${areaFormatada} ha
+
+💾 *Status:* APROVADO E CONFIRMADO NO BANCO DE DADOS!`;
 }
 
 // Função para processar correção
