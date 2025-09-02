@@ -106,6 +106,12 @@ async function processMessageWithAI(message) {
         💊 INSUMOS: "MAP", "prez", "tuit", "adubo" com quantidades
         👥 COLABORADORES: Listas de números separados por vírgula ou traço
         🤝 APOIO: Registros com "premio", "operador", "motorista"
+        📋 FORMATO EQUIPE APOIO: "Tp235-54-premio-operador"
+          - PREFIXO: "Tp235" (antes do primeiro hífen)
+          - REGISTRO: "54" (número após primeiro hífen)
+          - PRÊMIO: "SIM" se contém "premio", "NAO" se não contém
+          - CLASSE: "OPERADOR", "MOTORISTA", etc. (última parte em maiúsculas)
+          - VALOR: 30.00 se prêmio = "SIM", 0 se "NAO"
 
         REGRAS DE FORMATAÇÃO BRASILEIRA:
         - VÍRGULA = decimal (40,42 mantém vírgula no resultado: "40,42")
@@ -124,6 +130,10 @@ async function processMessageWithAI(message) {
         "DATA: 01/09/2025 PROJETO: 820 SUPERVISOR: OSCAR" → data="2025-09-01", projeto="820", supervisor="OSCAR"
         "820 - OSCAR - plantio - ype - T008 - 5,42ha - HOJE" → projeto="820", supervisor="OSCAR", area_realizada="40,42"
         "Projeto 820 Oscar plantio fazenda ype talhão 008 área 40,42" → mesmo resultado
+        
+        EXEMPLO EQUIPE APOIO:
+        "Tp235-54-premio-operador" → {"prefixo": "Tp235", "registro": "54", "premio": "SIM", "classe": "OPERADOR", "valor": 30.00}
+        "TP001-528-motorista" → {"prefixo": "TP001", "registro": "528", "premio": "NAO", "classe": "MOTORISTA", "valor": 0}
 
         ATENÇÃO MÁXIMA AOS ERROS ANTERIORES:
         ❌ SUPERVISOR ≠ lista de colaboradores (OSCAR ≠ "118,15,413")
@@ -164,7 +174,11 @@ async function processMessageWithAI(message) {
                 "divisao_igual": "SIM ou NAO"
             },
             "equipe_apoio": [
-                {"registro": "string", "premio": "SIM", "classe": "OPERADOR", "valor": 30.00}
+                {"prefixo": "Tp235", "registro": "54", "premio": "SIM", "classe": "OPERADOR", "valor": 30.00},
+                {"prefixo": "TP001", "registro": "528", "premio": "NAO", "classe": "MOTORISTA", "valor": 0}
+            ],
+            "estrutura_apoio": [
+                {"prefixo": "TP001", "registro": "528", "premio": "SIM", "classe": "MOTORISTA", "valor": 30.00}
             ]
         }
 
