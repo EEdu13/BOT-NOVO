@@ -108,23 +108,29 @@ async function processMessageWithAI(message) {
         🤝 APOIO: Registros com "premio", "operador", "motorista"
 
         REGRAS DE FORMATAÇÃO BRASILEIRA:
-        - VÍRGULA = decimal (40,42 mantém vírgula)
-        - PONTO em números grandes = milhares (11.348 → vai para TIPO como laudo)
+        - VÍRGULA = decimal (40,42 mantém vírgula no resultado: "40,42")
+        - PONTO em números grandes = milhares (11.348 → vai para TIPO como laudo: "11348")
         - Nomes: apenas primeira letra maiúscula se for nome completo
         - "HOJE" = data atual (2025-09-02)
         - Datas brasileiras: DD/MM/YYYY → YYYY-MM-DD
 
+        IGNORE COMPLETAMENTE:
+        ❌ Linhas só com traços/underscores: "------------", "-------------"
+        ❌ Títulos de seções: "EQUIPE APOIO ENVOLVIDA", "OBS:", "DIVISÃO DO PREMIO IGUAL:"
+        ❌ Separadores visuais
+        ❌ Textos explicativos
+
         EXEMPLOS DE IDENTIFICAÇÃO FLEXÍVEL:
         "DATA: 01/09/2025 PROJETO: 820 SUPERVISOR: OSCAR" → data="2025-09-01", projeto="820", supervisor="OSCAR"
-        "820 - OSCAR - plantio - ype - T008 - 5,42ha - HOJE" → projeto="820", supervisor="OSCAR", area_realizada="5,42"
-        "Projeto 820 Oscar plantio fazenda ype talhão 008 área 5,42" → mesmo resultado
+        "820 - OSCAR - plantio - ype - T008 - 5,42ha - HOJE" → projeto="820", supervisor="OSCAR", area_realizada="40,42"
+        "Projeto 820 Oscar plantio fazenda ype talhão 008 área 40,42" → mesmo resultado
 
         ATENÇÃO MÁXIMA AOS ERROS ANTERIORES:
         ❌ SUPERVISOR ≠ lista de colaboradores (OSCAR ≠ "118,15,413")
         ❌ EMPRESA ≠ nome de líder (LARSIL ≠ "Elton Costa") 
         ❌ COD deve ficar VAZIO (campo reservado)
-        ❌ LAUDO (números grandes) vai para campo TIPO
-        ✅ Mantenha VÍRGULAS nos decimais (5,42 não vira 5.42)
+        ❌ LAUDO (números grandes) vai para campo TIPO: "11348"
+        ✅ Mantenha VÍRGULAS nos decimais: "40,42" (não converta para 40.42)
 
         JSON DE SAÍDA OBRIGATÓRIO:
         {
@@ -140,16 +146,16 @@ async function processMessageWithAI(message) {
                 "servico": "string",
                 "fazenda": "string",
                 "talhao": "string",
-                "area_realizada": "string com vírgula",
-                "area_total": "number",
-                "area_restante": "number", 
+                "area_realizada": "string com vírgula: ex: 40,42",
+                "area_total": "string com vírgula: ex: 59,99",
+                "area_restante": "string com vírgula: ex: 3,81", 
                 "status_talhao": "string",
                 "lote_nf": "",
-                "tipo": "string (LAUDO números grandes aqui)",
+                "tipo": "string (LAUDO números grandes aqui: ex: 11348)",
                 "clone": "string",
                 "plantadas": "number",
                 "descarte": "number",
-                "insumos": [{"lote": "", "insumo": "string", "quantidade": "number"}],
+                "insumos": [{"lote": "", "insumo": "string", "quantidade": "string com vírgula"}],
                 "observacao": "string"
             },
             "rateio_producao": {
@@ -212,8 +218,12 @@ async function insertDataToDatabase(extractedData) {
         // Funções auxiliares para conversões seguras
         const toDecimalSafe = (value) => {
             if (value === null || value === undefined || value === '') return 0;
-            const num = parseFloat(String(value).replace(',', '.'));
-            const result = isNaN(num) ? 0 : num;
+            let num = parseFloat(String(value).replace(',', '.'));
+            if (isNaN(num)) num = 0;
+            
+            // Limitar a 6 casas decimais para evitar problemas de precisão do SQL Server
+            const result = Math.round(num * 1000000) / 1000000;
+            
             console.log(`🔢 Conversão decimal: "${value}" → ${result}`);
             return result;
         };
@@ -264,24 +274,24 @@ async function insertDataToDatabase(extractedData) {
         boletimRequest.input('servico', sql.VarChar, String(dados.servico || ''));
         boletimRequest.input('fazenda', sql.VarChar, String(dados.fazenda || ''));
         boletimRequest.input('talhao', sql.VarChar, String(dados.talhao || ''));
-        boletimRequest.input('area_realizada', sql.Decimal, toDecimalSafe(dados.area_realizada));
+        boletimRequest.input('area_realizada', sql.Decimal(10,6), toDecimalSafe(dados.area_realizada));
         boletimRequest.input('status', sql.VarChar, String(dados.status_talhao || ''));
         boletimRequest.input('tipo', sql.VarChar, String(dados.tipo || ''));
         boletimRequest.input('clone', sql.VarChar, String(dados.clone || ''));
-        boletimRequest.input('plantadas', sql.Decimal, toDecimalSafe(dados.plantadas));
-        boletimRequest.input('descarte', sql.Decimal, toDecimalSafe(dados.descarte));
+        boletimRequest.input('plantadas', sql.Decimal(10,0), toDecimalSafe(dados.plantadas));
+        boletimRequest.input('descarte', sql.Decimal(10,0), toDecimalSafe(dados.descarte));
         
         // Insumos
         const insumos = dados.insumos || [];
         boletimRequest.input('lote1', sql.VarChar, String(insumos[0]?.lote || ''));
         boletimRequest.input('insumo1', sql.VarChar, String(insumos[0]?.insumo || ''));
-        boletimRequest.input('quantidade1', sql.Decimal, toDecimalSafe(insumos[0]?.quantidade));
+        boletimRequest.input('quantidade1', sql.Decimal(10,6), toDecimalSafe(insumos[0]?.quantidade));
         boletimRequest.input('lote2', sql.VarChar, String(insumos[1]?.lote || ''));
         boletimRequest.input('insumo2', sql.VarChar, String(insumos[1]?.insumo || ''));
-        boletimRequest.input('quantidade2', sql.Decimal, toDecimalSafe(insumos[1]?.quantidade));
+        boletimRequest.input('quantidade2', sql.Decimal(10,6), toDecimalSafe(insumos[1]?.quantidade));
         boletimRequest.input('lote3', sql.VarChar, String(insumos[2]?.lote || ''));
         boletimRequest.input('insumo3', sql.VarChar, String(insumos[2]?.insumo || ''));
-        boletimRequest.input('quantidade3', sql.Decimal, toDecimalSafe(insumos[2]?.quantidade));
+        boletimRequest.input('quantidade3', sql.Decimal(10,6), toDecimalSafe(insumos[2]?.quantidade));
         boletimRequest.input('observacao', sql.VarChar, String(dados.observacao || ''));
 
         console.log('📊 Dados sendo inseridos:', {
@@ -398,9 +408,9 @@ async function insertDataToDatabase(extractedData) {
                     request.input('registro', sql.VarChar, String(rateio.colaboradores[i] || ''));
                     request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
                     request.input('atividade', sql.VarChar, String(dados.servico || ''));
-                    request.input('producao', sql.Decimal, toDecimalSafe(valorPorColaborador));
+                    request.input('producao', sql.Decimal(10,6), toDecimalSafe(valorPorColaborador));
                     request.input('classe', sql.VarChar, '');
-                    request.input('valor', sql.Decimal, 0);
+                    request.input('valor', sql.Decimal(10,2), 0);
                     request.input('prefixo', sql.VarChar, '');
                     
                     await request.query(premioQuery);
