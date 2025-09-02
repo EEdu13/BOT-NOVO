@@ -53,35 +53,42 @@ const zapiConfig = {
 // Função para enviar mensagem com botões via Z-API
 async function sendWhatsAppMessageWithButtons(phone, messageData) {
     try {
-        console.log(`🔗 URL Z-API: ${apiUrl}/send-button-list`);
+        const url = `${zapiConfig.baseUrl}/${zapiConfig.instanceId}/token/${zapiConfig.token}/send-button-actions`;
+        console.log(`🔗 URL Z-API: ${url}`);
         
         const payload = {
             phone: phone,
             message: messageData.message,
-            buttonList: {
-                buttons: messageData.buttons.map(button => ({
-                    id: button.id,
-                    label: button.title
-                }))
-            }
+            title: "📋 BOLETIM PARA APROVAÇÃO",
+            footer: "Bot Automático - ALR Florestal",
+            buttonActions: [
+                {
+                    id: messageData.buttons[0].id,
+                    type: "REPLY",
+                    label: messageData.buttons[0].title
+                },
+                {
+                    id: messageData.buttons[1].id,
+                    type: "REPLY",
+                    label: messageData.buttons[1].title
+                }
+            ]
         };
         
         console.log('📤 Payload com botões:', JSON.stringify(payload, null, 2));
         
-        const response = await fetch(`${apiUrl}/send-button-list`, {
-            method: 'POST',
+        const response = await axios.post(url, payload, {
             headers: {
                 'Content-Type': 'application/json',
-                'Client-Token': zapiToken
+                'Client-Token': zapiConfig.clientToken
             },
-            body: JSON.stringify(payload)
+            timeout: 10000
         });
 
-        const result = await response.json();
-        console.log('✅ Resposta Z-API (botões):', result);
-        return result;
+        console.log('✅ Resposta Z-API (botões):', response.data);
+        return response.data;
     } catch (error) {
-        console.error('❌ Erro ao enviar mensagem com botões:', error);
+        console.error('❌ Erro ao enviar mensagem com botões:', error.message);
         // Fallback: enviar mensagem simples
         return await sendWhatsAppMessage(phone, messageData.message);
     }
@@ -1030,8 +1037,11 @@ app.post('/webhook', async (req, res) => {
                           req.body.content;
         const fromMe = req.body.fromMe;
         
-        // Detectar clique em botão - Z-API retorna o ID do botão como texto da mensagem
-        const buttonClick = req.body.selectedButtonId || req.body.selectedRowId || req.body.button?.id || 
+        // Detectar clique em botão - Z-API retorna o ID do botão quando clicado
+        const buttonClick = req.body.selectedButtonId || 
+                           req.body.selectedRowId || 
+                           req.body.button?.id ||
+                           req.body.buttonResponse?.selectedButtonId ||
                            (messageText && (messageText.startsWith('APROVAR_') || messageText.startsWith('CORRIGIR_'))) ? messageText : null;
         
         // Verificar se é uma resposta/reply (mensagem citada)
