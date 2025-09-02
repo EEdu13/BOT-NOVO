@@ -365,6 +365,11 @@ async function insertDataToDatabase(extractedData) {
         const boletimIdResult = await pool.request().query('SELECT TOP 1 ID FROM BOLETIM_DIARIO_COPY ORDER BY ID DESC');
         const boletimId = boletimIdResult.recordset[0]?.ID;
         console.log('🆔 ID do boletim inserido:', boletimId);
+        
+        // Validar se o boletimId foi obtido corretamente
+        if (!boletimId || isNaN(boletimId)) {
+            throw new Error(`ID do boletim inválido: ${boletimId}`);
+        }
 
         // 2. Inserir registros na tabela PREMIO_COPY
         const premioQuery = `
@@ -401,19 +406,45 @@ async function insertDataToDatabase(extractedData) {
                 try {
                     console.log(`   - Colaborador ${i + 1}: ${rateio.colaboradores[i]} = ${valorPorColaborador}`);
                     const request = pool.request();
-                    request.input('RAW', sql.BigInt, boletimId); // Conectar com o boletim
-                    request.input('data', sql.DateTime, toDateSafe(dados.data));
-                    request.input('projeto', sql.VarChar, String(dados.projeto || ''));
-                    request.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
-                    request.input('registro', sql.VarChar, String(rateio.colaboradores[i] || ''));
+                    
+                    // Validar todos os valores antes de inserir
+                    const rawValue = parseInt(boletimId);
+                    const dataValue = toDateSafe(dados.data);
+                    const projetoValue = String(dados.projeto || '');
+                    const supervisorValue = String(dados.supervisor || '');
+                    const registroValue = String(rateio.colaboradores[i] || '');
+                    const atividadeValue = String(dados.servico || '');
+                    const producaoValue = toDecimalSafe(valorPorColaborador);
+                    
+                    console.log(`🔍 Validando colaborador ${i + 1}:`, {
+                        RAW: rawValue, tipo: typeof rawValue,
+                        data: dataValue, tipo_data: typeof dataValue,
+                        projeto: projetoValue, tipo_projeto: typeof projetoValue,
+                        supervisor: supervisorValue, tipo_supervisor: typeof supervisorValue,
+                        registro: registroValue, tipo_registro: typeof registroValue,
+                        atividade: atividadeValue, tipo_atividade: typeof atividadeValue,
+                        producao: producaoValue, tipo_producao: typeof producaoValue
+                    });
+                    
+                    // Verificar se algum valor é inválido
+                    if (isNaN(rawValue)) throw new Error(`RAW inválido: ${rawValue}`);
+                    if (!dataValue) throw new Error(`Data inválida: ${dataValue}`);
+                    if (isNaN(producaoValue)) throw new Error(`Produção inválida: ${producaoValue}`);
+                    
+                    request.input('RAW', sql.BigInt, rawValue);
+                    request.input('data', sql.DateTime, dataValue);
+                    request.input('projeto', sql.VarChar, projetoValue);
+                    request.input('supervisor', sql.VarChar, supervisorValue);
+                    request.input('registro', sql.VarChar, registroValue);
                     request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
-                    request.input('atividade', sql.VarChar, String(dados.servico || ''));
-                    request.input('producao', sql.Decimal(10,6), toDecimalSafe(valorPorColaborador));
+                    request.input('atividade', sql.VarChar, atividadeValue);
+                    request.input('producao', sql.Decimal(10,6), producaoValue);
                     request.input('classe', sql.VarChar, '');
                     request.input('valor', sql.Decimal(10,2), 0);
                     request.input('prefixo', sql.VarChar, '');
                     
                     await request.query(premioQuery);
+                    console.log(`✅ Colaborador ${i + 1} inserido com sucesso`);
                 } catch (premioError) {
                     console.error(`❌ Erro ao inserir colaborador ${i + 1} (${rateio.colaboradores[i]}):`, premioError.message);
                     console.error(`📊 Dados do colaborador:`, {
@@ -438,9 +469,9 @@ async function insertDataToDatabase(extractedData) {
                 request.input('registro', sql.VarChar, String(apoio.registro || ''));
                 request.input('colaborador', sql.VarChar, '');
                 request.input('atividade', sql.VarChar, String(dados.servico || ''));
-                request.input('producao', sql.Decimal, 0);
+                request.input('producao', sql.Decimal(10,6), 0);
                 request.input('classe', sql.VarChar, String(apoio.classe || ''));
-                request.input('valor', sql.Decimal, toDecimalSafe(apoio.valor));
+                request.input('valor', sql.Decimal(10,2), toDecimalSafe(apoio.valor));
                 request.input('prefixo', sql.VarChar, '');
                 
                 await request.query(premioQuery);
@@ -458,9 +489,9 @@ async function insertDataToDatabase(extractedData) {
                 request.input('registro', sql.VarChar, String(estrutura.registro || ''));
                 request.input('colaborador', sql.VarChar, '');
                 request.input('atividade', sql.VarChar, String(dados.servico || ''));
-                request.input('producao', sql.Decimal, 0);
+                request.input('producao', sql.Decimal(10,6), 0);
                 request.input('classe', sql.VarChar, String(estrutura.classe || ''));
-                request.input('valor', sql.Decimal, toDecimalSafe(estrutura.valor));
+                request.input('valor', sql.Decimal(10,2), toDecimalSafe(estrutura.valor));
                 request.input('prefixo', sql.VarChar, String(estrutura.prefixo || ''));
                 
                 await request.query(premioQuery);
