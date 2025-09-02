@@ -279,34 +279,34 @@ async function insertDataToDatabase(extractedData) {
         };
         
         boletimRequest.input('data', sql.DateTime, toDateSafe(dados.data));
-        boletimRequest.input('projeto', sql.VarChar, String(dados.projeto || ''));
-        boletimRequest.input('equipe', sql.VarChar, String(dados.equipe || ''));
-        boletimRequest.input('supervisor', sql.VarChar, String(dados.supervisor || ''));
-        boletimRequest.input('lider', sql.VarChar, String(dados.lider || ''));
-        boletimRequest.input('cod', sql.VarChar, String(dados.cod || ''));
-        boletimRequest.input('empresa', sql.VarChar, String(dados.empresa || ''));
-        boletimRequest.input('servico', sql.VarChar, String(dados.servico || ''));
-        boletimRequest.input('fazenda', sql.VarChar, String(dados.fazenda || ''));
-        boletimRequest.input('talhao', sql.VarChar, String(dados.talhao || ''));
+        boletimRequest.input('projeto', sql.VarChar, String(dados.projeto || '').toUpperCase());
+        boletimRequest.input('equipe', sql.VarChar, String(dados.equipe || '').toUpperCase());
+        boletimRequest.input('supervisor', sql.VarChar, String(dados.supervisor || '').toUpperCase());
+        boletimRequest.input('lider', sql.VarChar, String(dados.lider || '').toUpperCase());
+        boletimRequest.input('cod', sql.VarChar, String(dados.cod || '').toUpperCase());
+        boletimRequest.input('empresa', sql.VarChar, String(dados.empresa || '').toUpperCase());
+        boletimRequest.input('servico', sql.VarChar, String(dados.servico || '').toUpperCase());
+        boletimRequest.input('fazenda', sql.VarChar, String(dados.fazenda || '').toUpperCase());
+        boletimRequest.input('talhao', sql.VarChar, String(dados.talhao || '').toUpperCase());
         boletimRequest.input('area_realizada', sql.Decimal(10,6), toDecimalSafe(dados.area_realizada));
-        boletimRequest.input('status', sql.VarChar, String(dados.status_talhao || ''));
-        boletimRequest.input('tipo', sql.VarChar, String(dados.tipo || ''));
-        boletimRequest.input('clone', sql.VarChar, String(dados.clone || ''));
+        boletimRequest.input('status', sql.VarChar, String(dados.status_talhao || '').toUpperCase());
+        boletimRequest.input('tipo', sql.VarChar, String(dados.tipo || '').toUpperCase());
+        boletimRequest.input('clone', sql.VarChar, String(dados.clone || '').toUpperCase());
         boletimRequest.input('plantadas', sql.Decimal(10,0), toDecimalSafe(dados.plantadas));
         boletimRequest.input('descarte', sql.Decimal(10,0), toDecimalSafe(dados.descarte));
         
         // Insumos
         const insumos = dados.insumos || [];
-        boletimRequest.input('lote1', sql.VarChar, String(insumos[0]?.lote || ''));
-        boletimRequest.input('insumo1', sql.VarChar, String(insumos[0]?.insumo || ''));
+        boletimRequest.input('lote1', sql.VarChar, String(insumos[0]?.lote || '').toUpperCase());
+        boletimRequest.input('insumo1', sql.VarChar, String(insumos[0]?.insumo || '').toUpperCase());
         boletimRequest.input('quantidade1', sql.Decimal(10,6), toDecimalSafe(insumos[0]?.quantidade));
-        boletimRequest.input('lote2', sql.VarChar, String(insumos[1]?.lote || ''));
-        boletimRequest.input('insumo2', sql.VarChar, String(insumos[1]?.insumo || ''));
+        boletimRequest.input('lote2', sql.VarChar, String(insumos[1]?.lote || '').toUpperCase());
+        boletimRequest.input('insumo2', sql.VarChar, String(insumos[1]?.insumo || '').toUpperCase());
         boletimRequest.input('quantidade2', sql.Decimal(10,6), toDecimalSafe(insumos[1]?.quantidade));
-        boletimRequest.input('lote3', sql.VarChar, String(insumos[2]?.lote || ''));
-        boletimRequest.input('insumo3', sql.VarChar, String(insumos[2]?.insumo || ''));
+        boletimRequest.input('lote3', sql.VarChar, String(insumos[2]?.lote || '').toUpperCase());
+        boletimRequest.input('insumo3', sql.VarChar, String(insumos[2]?.insumo || '').toUpperCase());
         boletimRequest.input('quantidade3', sql.Decimal(10,6), toDecimalSafe(insumos[2]?.quantidade));
-        boletimRequest.input('observacao', sql.VarChar, String(dados.observacao || ''));
+        boletimRequest.input('observacao', sql.VarChar, String(dados.observacao || '').toUpperCase());
 
         console.log('📊 Dados sendo inseridos:', {
             data: toDateSafe(dados.data),
@@ -447,11 +447,11 @@ async function insertDataToDatabase(extractedData) {
                     
                     request.input('RAW', sql.BigInt, rawValue);
                     request.input('data', sql.DateTime, dataValue);
-                    request.input('projeto', sql.VarChar, projetoValue);
-                    request.input('supervisor', sql.VarChar, supervisorValue);
-                    request.input('registro', sql.VarChar, registroValue);
+                    request.input('projeto', sql.VarChar, projetoValue.toUpperCase());
+                    request.input('supervisor', sql.VarChar, supervisorValue.toUpperCase());
+                    request.input('registro', sql.VarChar, registroValue.toUpperCase());
                     request.input('colaborador', sql.VarChar, ''); // Auto-preenchido
-                    request.input('atividade', sql.VarChar, atividadeValue);
+                    request.input('atividade', sql.VarChar, atividadeValue.toUpperCase());
                     request.input('producao', sql.Decimal(10,6), producaoValue);
                     request.input('classe', sql.VarChar, '');
                     request.input('valor', sql.Decimal(10,2), 0);
@@ -506,13 +506,13 @@ async function insertDataToDatabase(extractedData) {
                     
                     request.input('RAW', sql.BigInt, rawValue);
                     request.input('data', sql.DateTime, dataValue);
-                    request.input('projeto', sql.VarChar, projetoValue);
-                    request.input('supervisor', sql.VarChar, supervisorValue);
-                    request.input('registro', sql.VarChar, registroValue);
+                    request.input('projeto', sql.VarChar, projetoValue.toUpperCase());
+                    request.input('supervisor', sql.VarChar, supervisorValue.toUpperCase());
+                    request.input('registro', sql.VarChar, registroValue.toUpperCase());
                     request.input('colaborador', sql.VarChar, '');
-                    request.input('atividade', sql.VarChar, atividadeValue);
+                    request.input('atividade', sql.VarChar, atividadeValue.toUpperCase());
                     request.input('producao', sql.Decimal(10,2), 0);
-                    request.input('classe', sql.VarChar, classeValue);
+                    request.input('classe', sql.VarChar, classeValue.toUpperCase());
                     request.input('valor', sql.Decimal(10,2), valorValue);
                     request.input('prefixo', sql.VarChar, '');
                     
@@ -562,15 +562,15 @@ async function insertDataToDatabase(extractedData) {
                     
                     request.input('RAW', sql.BigInt, rawValue);
                     request.input('data', sql.DateTime, dataValue);
-                    request.input('projeto', sql.VarChar, projetoValue);
-                    request.input('supervisor', sql.VarChar, supervisorValue);
-                    request.input('registro', sql.VarChar, registroValue);
+                    request.input('projeto', sql.VarChar, projetoValue.toUpperCase());
+                    request.input('supervisor', sql.VarChar, supervisorValue.toUpperCase());
+                    request.input('registro', sql.VarChar, registroValue.toUpperCase());
                     request.input('colaborador', sql.VarChar, '');
-                    request.input('atividade', sql.VarChar, atividadeValue);
+                    request.input('atividade', sql.VarChar, atividadeValue.toUpperCase());
                     request.input('producao', sql.Decimal(10,2), 0);
-                    request.input('classe', sql.VarChar, classeValue);
+                    request.input('classe', sql.VarChar, classeValue.toUpperCase());
                     request.input('valor', sql.Decimal(10,2), valorValue);
-                    request.input('prefixo', sql.VarChar, prefixoValue);
+                    request.input('prefixo', sql.VarChar, prefixoValue.toUpperCase());
                     
                     await request.query(premioQuery);
                     console.log(`✅ Estrutura ${k + 1} inserida com sucesso`);
@@ -713,12 +713,16 @@ async function completarNomesAutomaticamente(dados) {
         if (dados.dados_boletim.supervisor && dados.dados_boletim.supervisor.trim()) {
             const supervisorAtual = dados.dados_boletim.supervisor.trim();
             
-            // Se for apenas um nome (não contém espaço), buscar nome completo
-            if (!supervisorAtual.includes(' ') && supervisorAtual.length > 2) {
-                console.log(`🔍 Buscando nome completo para supervisor: ${supervisorAtual}`);
-                const nomeCompleto = await buscarSupervisorCompleto(supervisorAtual, projeto);
+            // Sempre tentar buscar nome completo no organograma
+            console.log(`🔍 Buscando nome completo para supervisor: ${supervisorAtual}`);
+            const nomeCompleto = await buscarSupervisorCompleto(supervisorAtual, projeto);
+            
+            // Se encontrou um nome diferente/mais completo, usar ele
+            if (nomeCompleto && nomeCompleto !== supervisorAtual) {
                 dados.dados_boletim.supervisor = nomeCompleto;
                 console.log(`✅ Supervisor atualizado: ${supervisorAtual} → ${nomeCompleto}`);
+            } else {
+                console.log(`ℹ️ Supervisor mantido: ${supervisorAtual}`);
             }
         }
         
@@ -726,12 +730,16 @@ async function completarNomesAutomaticamente(dados) {
         if (dados.dados_boletim.lider && dados.dados_boletim.lider.trim()) {
             const liderAtual = dados.dados_boletim.lider.trim();
             
-            // Se for apenas um nome (não contém espaço), buscar nome completo
-            if (!liderAtual.includes(' ') && liderAtual.length > 2) {
-                console.log(`🔍 Buscando nome completo para líder: ${liderAtual}`);
-                const nomeCompleto = await buscarLiderCompleto(liderAtual, projeto);
+            // Sempre tentar buscar nome completo no organograma
+            console.log(`🔍 Buscando nome completo para líder: ${liderAtual}`);
+            const nomeCompleto = await buscarLiderCompleto(liderAtual, projeto);
+            
+            // Se encontrou um nome diferente/mais completo, usar ele
+            if (nomeCompleto && nomeCompleto !== liderAtual) {
                 dados.dados_boletim.lider = nomeCompleto;
                 console.log(`✅ Líder atualizado: ${liderAtual} → ${nomeCompleto}`);
+            } else {
+                console.log(`ℹ️ Líder mantido: ${liderAtual}`);
             }
         }
         
